@@ -23,12 +23,18 @@ struct Token {
 
 // current Token
 Token *token;
+char *user_input;
 
 // error function
 // Take same arguments as printf.
-void error (char *fmt, ...) {
+void error_at (char *loc, char *fmt, ...) {
   va_list ap;
   va_start (ap, fmt);
+
+  int pos = loc - user_input;
+  fprintf (stderr, "%s\n", user_input);
+  fprintf (stderr, "%*s", pos, "");
+  fprintf (stderr, "^ ");
   vfprintf (stderr, fmt, ap);
   fprintf (stderr, "\n");
   exit (1);
@@ -45,14 +51,14 @@ bool consume (char op) {
 // move to next Token from Token sequence
 void expect (char op) {
   if (token->kind != TK_RESERVED || token->str [0] != op)
-    error ("'%c' is wrong.", op);
+    error_at (token->str, "'%c' is wrong.", op);
   token = token->next;
 }
 
 // return num from sequence
 int expect_number () {
   if (token->kind != TK_NUM)
-    error ("Not number.");
+    error_at (token->str, "Not number.");
   int val = token->val;
   token = token->next;
   return val;
@@ -87,7 +93,7 @@ Token *tokenize (char *p) {
       cur = new_token (TK_NUM, cur, p);
       cur->val = strtol (p, &p, 10);
     } else {
-      error ("Cannot tokeninze.\n");
+      error_at (token->str, "Cannot tokeninze.\n");
     }
   }
 
@@ -99,11 +105,12 @@ int
 main (int argc, char *argv [])
 {
   if (argc != 2) {
-    error ("usage: %s <number>\n", argv [0]);
+    fprintf (stderr, "usage: %s <number>\n", argv [0]);
     return 1;
   }
 
-  token = tokenize (argv [1]);
+  user_input = argv [1];
+  token = tokenize (user_input);
 
   printf (".intel_syntax noprefix\n");
   printf (".globl main\n");
@@ -117,7 +124,7 @@ main (int argc, char *argv [])
     else if (consume ('-'))
       printf ("  sub rax, %d\n", expect_number ());
     else
-      error ("operation is wrong");
+      error_at (token->str, "operation is wrong");
   }
 
   printf ("  ret\n");
