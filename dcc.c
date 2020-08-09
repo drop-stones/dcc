@@ -84,7 +84,6 @@ Token *new_token (TokenKind kind, Token *cur, char *str) {
   Token *tok = calloc (1, sizeof (Token));
   tok->kind = kind;
   tok->str  = str;
-  tok->len  = strlen (str);
   cur->next = tok;
   return tok;
 }
@@ -104,9 +103,11 @@ Token *tokenize (char *p) {
                !strncmp (p, "==", 2) ||
                !strncmp (p, "!=", 2)) {
       cur = new_token (TK_RESERVED, cur, p);
+      cur->len = 2;
       p += 2;
     } else if (strchr ("+-*/()<>", *p)) {
       cur = new_token (TK_RESERVED, cur, p++);
+      cur->len = 1;
     } else if (isdigit (*p)) {
       cur = new_token (TK_NUM, cur, p);
       cur->val = strtol (p, &p, 10);
@@ -154,7 +155,11 @@ typedef enum {
   ND_SUB,	// -
   ND_MUL,	// *
   ND_DIV,	// /
-  ND_NUM,	// number
+  ND_EQ,	// ==
+  ND_NE,	// !=
+  ND_LT,	// <
+  ND_LE,	// <=
+  ND_NUM,	// Integer
 } NodeKind;
 
 
@@ -181,11 +186,49 @@ Node *new_node_num (int val) {
   return node;
 }
 
+Node *expr ();
+Node *equality ();
+Node *relational ();
+Node *add ();
 Node *mul ();
 Node *unary ();
 Node *primary ();
 
 Node *expr () {
+  return equality ();
+}
+
+Node *equality () {
+  Node *node = relational ();
+
+  for (;;) {
+    if (consume ("=="))
+      node = new_node (ND_EQ, node, relational ());
+    else if (consume ("!="))
+      node = new_node (ND_NE, node, relational ());
+    else
+      return node;
+  }
+}
+
+Node *relational () {
+  Node *node = add ();
+
+  for (;;) {
+    if (consume ("<"))
+      node = new_node (ND_LT, node, add ());
+    else if (consume ("<="))
+      node = new_node (ND_LE, node, add ());
+    else if (consume (">"))
+      node = new_node (ND_LT, add (), node);
+    else if (consume (">="))
+      node = new_node (ND_LE, add (), node);
+    else
+      return node;
+  }
+}
+
+Node *add () {
   Node *node = mul ();
 
   for (;;) {
@@ -259,6 +302,26 @@ void gen (Node *node) {
     printf ("  cqo\n");
     printf ("  idiv rdi\n");
     break;
+  case ND_EQ:
+    printf ("  cmp rax, rdi\n");
+    printf ("  sete al\n");
+    printf ("  movzb rax, al\n");
+    break;
+  case ND_NE:
+    printf ("  cmp rax, rdi\n");
+    printf ("  setne al\n");
+    printf ("  movzb rax, al\n");
+    break;
+  case ND_LT:
+    printf ("  cmp rax, rdi\n");
+    printf ("  setl al\n");
+    printf ("  movzb rax, al\n");
+    break;
+  case ND_LE:
+    printf ("  cmp rax, rdi\n");
+    printf ("  setle al\n");
+    printf ("  movzb rax, al\n");
+    break;
   }
 
   printf ("  push rax\n");
@@ -275,11 +338,7 @@ main (int argc, char *argv [])
 
   user_input = argv [1];
   token = tokenize (user_input);
-  print_tokens (token);
-  return 0;
-
   Node *node = expr ();
-
 
   printf (".intel_syntax noprefix\n");
   printf (".globl main\n");
