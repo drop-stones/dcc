@@ -5,6 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct Token Token;
+typedef struct Node Node;
+
+// current Token
+Token *token;
+char *user_input;
 
 /*
  *  Tokenizer
@@ -13,22 +19,18 @@
 typedef enum {
   TK_RESERVED,	// operation
   TK_NUM, 	// number
-  TK_PAR,	// parentheses
   TK_EOF,	// End of File
 } TokenKind;
 
-typedef struct Token Token;
 
 struct Token {
   TokenKind kind;
   Token *next;
   int val;
   char *str;
+  int len;
 };
 
-// current Token
-Token *token;
-char *user_input;
 
 // error function
 // Take same arguments as printf.
@@ -46,16 +48,20 @@ void error_at (char *loc, char *fmt, ...) {
 }
 
 // consume one Token from Token sequence
-bool consume (char op) {
-  if (token->kind != TK_RESERVED || token->str [0] != op)
+bool consume (char *op) {
+  if (token->kind != TK_RESERVED ||
+      strlen (op) != token->len  ||
+      memcmp (token->str, op, token->len))
     return false;
   token = token->next;
   return true;
 }
 
 // move to next Token from Token sequence
-void expect (char op) {
-  if (token->kind != TK_RESERVED || token->str [0] != op)
+void expect (char *op) {
+  if (token->kind != TK_RESERVED ||
+      strlen (op) != token->len  ||
+      memcmp (token->str, op, token->len))
     error_at (token->str, "'%c' is wrong.", op);
   token = token->next;
 }
@@ -78,6 +84,7 @@ Token *new_token (TokenKind kind, Token *cur, char *str) {
   Token *tok = calloc (1, sizeof (Token));
   tok->kind = kind;
   tok->str  = str;
+  tok->len  = strlen (str);
   cur->next = tok;
   return tok;
 }
@@ -92,8 +99,13 @@ Token *tokenize (char *p) {
     if (isspace (*p)) {
       // skip white space
       p++;
-    //} else if (*p == '+' || *p == '-' || *p == '*' || *p == '/') {
-    } else if (strchr ("+-*/()", *p)) {
+    } else if (!strncmp (p, "<=", 2) ||
+               !strncmp (p, ">=", 2) ||
+               !strncmp (p, "==", 2) ||
+               !strncmp (p, "!=", 2)) {
+      cur = new_token (TK_RESERVED, cur, p);
+      p += 2;
+    } else if (strchr ("+-*/()<>", *p)) {
       cur = new_token (TK_RESERVED, cur, p++);
     } else if (isdigit (*p)) {
       cur = new_token (TK_NUM, cur, p);
@@ -105,6 +117,30 @@ Token *tokenize (char *p) {
 
   new_token (TK_EOF, cur, p);
   return head.next;
+}
+
+char *getTokenKind (Token *token) {
+  if (token == NULL)
+    return "NULL";
+
+  switch (token->kind) {
+  case TK_RESERVED: return "TK_RESERVED";
+  case TK_NUM     : return "TK_NUM";
+  case TK_EOF     : return "TK_EOF";
+  }
+}
+
+void print_tokens (Token *head) {
+  if (head == NULL)
+    return;
+
+  printf ("%s", getTokenKind (head));
+  Token *cur = head->next;
+  while (cur != NULL) {
+    printf (" -> %s", getTokenKind (cur));
+    cur = cur->next;
+  }
+  printf ("\n");
 }
 
 
@@ -121,7 +157,6 @@ typedef enum {
   ND_NUM,	// number
 } NodeKind;
 
-typedef struct Node Node;
 
 // AST node
 struct Node {
@@ -154,9 +189,9 @@ Node *expr () {
   Node *node = mul ();
 
   for (;;) {
-    if (consume ('+'))
+    if (consume ("+"))
       node = new_node (ND_ADD, node, mul ());
-    else if (consume ('-'))
+    else if (consume ("-"))
       node = new_node (ND_SUB, node, mul ());
     else
       return node;
@@ -167,9 +202,9 @@ Node *mul () {
   Node *node = unary ();
 
   for (;;) {
-    if (consume ('*'))
+    if (consume ("*"))
       node = new_node (ND_MUL, node, unary ());
-    else if (consume ('/'))
+    else if (consume ("/"))
       node = new_node (ND_DIV, node, unary ());
     else
       return node;
@@ -177,17 +212,17 @@ Node *mul () {
 }
 
 Node *unary () {
-  if (consume ('+'))
+  if (consume ("+"))
     return primary ();
-  if (consume ('-'))
+  if (consume ("-"))
     return new_node (ND_SUB, new_node_num (0), primary ());
   return primary ();
 }
 
 Node *primary () {
-  if (consume ('(')) {
+  if (consume ("(")) {
     Node *node = expr ();
-    expect (')');
+    expect (")");
     return node;
   }
 
@@ -240,6 +275,9 @@ main (int argc, char *argv [])
 
   user_input = argv [1];
   token = tokenize (user_input);
+  print_tokens (token);
+  return 0;
+
   Node *node = expr ();
 
 
