@@ -39,6 +39,14 @@ bool consume (char *op) {
   return true;
 }
 
+Token *consume_ident () {
+  if (token->kind != TK_IDENT)
+    return NULL;
+  Token *tok_ident = token;
+  token = token->next;
+  return tok_ident;
+}
+
 // move to next Token from Token sequence
 void expect (char *op) {
   if (token->kind != TK_RESERVED ||
@@ -87,12 +95,15 @@ Token *tokenize (char *p) {
       cur = new_token (TK_RESERVED, cur, p);
       cur->len = 2;
       p += 2;
-    } else if (strchr ("+-*/()<>", *p)) {
+    } else if (strchr ("+-*/()<>=;", *p)) {
       cur = new_token (TK_RESERVED, cur, p++);
       cur->len = 1;
     } else if (isdigit (*p)) {
       cur = new_token (TK_NUM, cur, p);
       cur->val = strtol (p, &p, 10);
+    } else if ('a' <= *p && *p <= 'z') {
+      cur = new_token (TK_IDENT, cur, p++);
+      cur->len = 1;
     } else {
       error_at (p, "invalid token\n");
     }
@@ -108,9 +119,11 @@ char *getTokenKind (Token *token) {
 
   switch (token->kind) {
   case TK_RESERVED: return "TK_RESERVED";
+  case TK_IDENT   : return "TK_IDENT";
   case TK_NUM     : return "TK_NUM";
   case TK_EOF     : return "TK_EOF";
   }
+  return "error";
 }
 
 void print_tokens (Token *head) {
