@@ -15,6 +15,7 @@ typedef enum {
   TK_RESERVED,	// operation
   TK_IDENT,	// identifier
   TK_NUM, 	// number
+  TK_RETURN,	// return
   TK_EOF,	// End of File
 } TokenKind;
 
@@ -31,6 +32,7 @@ struct Token {
 void error (char *fmt, ...);
 void error_at (char *loc, char *fmt, ...);
 bool consume (char *op);
+bool consume_return ();
 Token *consume_ident ();
 void expect (char *op);
 int expect_number ();
@@ -46,6 +48,15 @@ extern Token *token;
  *  parse.c
  */
 
+// Local variable type
+typedef struct LVar LVar;
+struct LVar {
+  LVar *next;	// next variable
+  char *name;
+  int  len;
+  int offset;	// offset from rbp
+};
+
 // AST node
 typedef enum {
   ND_ADD,	// +
@@ -59,6 +70,7 @@ typedef enum {
   ND_ASSIGN,	// =
   ND_LVAR,	// Local variable
   ND_NUM,	// Integer
+  ND_RETURN,	// return
 } NodeKind;
 
 

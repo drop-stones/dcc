@@ -12,6 +12,18 @@ Node *unary ();
 Node *primary ();
 
 Node *code [100];
+LVar *locals;
+
+// find local variable
+LVar *find_lvar (Token *tok) {
+  if (locals == NULL)
+    locals = calloc (1, sizeof (LVar));
+
+  for (LVar *var = locals; var != NULL; var = var->next)
+    if (var->len == tok->len && !strncmp (tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
 
 Node *new_node (NodeKind kind, Node *lhs, Node *rhs) {
   Node *node = calloc (1, sizeof (Node));
@@ -37,7 +49,16 @@ void program () {
 }
 
 Node *stmt () {
-  Node *node = expr ();
+  Node *node;
+
+  if (consume_return ()) {
+    node = calloc (1, sizeof (Node));
+    node->kind = ND_RETURN;
+    node->lhs = expr ();
+  } else {
+    node = expr ();
+  }
+
   expect (";");
   return node;
 }
@@ -129,7 +150,21 @@ Node *primary () {
   } else if ((tok = consume_ident ()) != NULL) {
     node = calloc (1, sizeof (Node));
     node->kind = ND_LVAR;
-    node->offset = (tok->str [0] - 'a' + 1) * 8;  // a = -8, b = -16, ...
+
+    LVar *lvar = find_lvar (tok);
+    if (lvar != NULL) {
+      // the lvar exists
+      node->offset = lvar->offset;
+    } else {
+      // the lvar doesn't exist
+      lvar = calloc (1, sizeof (LVar));
+      lvar->next = locals;
+      lvar->name = tok->str;
+      lvar->len  = tok->len;
+      lvar->offset = locals->offset + 8;
+      node->offset = lvar->offset;
+      locals = lvar;
+    }
     return node;
   } else {
     return new_node_num (expect_number ());
