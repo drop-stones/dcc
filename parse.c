@@ -50,16 +50,58 @@ void program () {
 
 Node *stmt () {
   Node *node;
+  Token *tok;
 
-  if (consume_return ()) {
-    node = calloc (1, sizeof (Node));
-    node->kind = ND_RETURN;
-    node->lhs = expr ();
+  if ((tok = consume_keyword ()) != NULL) {
+    switch (tok->kind) {
+    case TK_RETURN:
+      node = calloc (1, sizeof (Node));
+      node->kind = ND_RETURN;
+      node->lhs = expr ();
+      expect (";");
+      break;
+    case TK_IF:
+      node = calloc (1, sizeof (Node));
+      node->kind = ND_IF;
+      expect ("(");
+      node->cond = expr ();
+      expect (")");
+      node->then = stmt ();
+      if (token->kind == TK_ELSE) {
+        consume_keyword ();
+        node->els = stmt ();
+      }
+      break;
+    case TK_WHILE:
+      node = calloc (1, sizeof (Node));
+      node->kind = ND_WHILE;
+      expect ("(");
+      node->cond = expr ();
+      expect (")");
+      node->body = stmt ();
+      break;
+    case TK_FOR:
+      node = calloc (1, sizeof (Node));
+      node->kind = ND_FOR;
+      expect ("(");
+      if (!consume (";")) {
+        node->init = expr ();
+        expect (";");
+      }
+      if (!consume (";")) {
+        node->cond = expr ();
+        expect (";");
+      }
+      if (!consume (")")) {
+        node->inc = expr ();
+        expect (")");
+      }
+      node->body = stmt ();
+    }
   } else {
     node = expr ();
+    expect (";");
   }
-
-  expect (";");
   return node;
 }
 

@@ -1,5 +1,7 @@
 #include "dcc.h"
 
+int L_count = 0;
+
 void gen_lval (Node *node) {
   if (node->kind != ND_LVAR)
     error ("Left value is not variable in assinment\n");
@@ -13,6 +15,7 @@ void gen (Node *node) {
   if (node == NULL)
     exit (1);
 
+  int Label;
   switch (node->kind) {
   case ND_NUM:
     printf ("  push %d\n", node->val);
@@ -39,6 +42,50 @@ void gen (Node *node) {
     printf ("  mov rsp, rbp\n");
     printf ("  pop rbp\n");
     printf ("  ret\n");
+    return;
+  case ND_IF:
+    Label = L_count++;
+    gen (node->cond);
+    printf ("  pop rax\n");
+    printf ("  cmp rax, 0\n");
+    if (node->els == NULL) {
+      printf ("  je .Lend%03d\n", Label);
+      gen (node->then);
+      printf (".Lend%03d:\n", Label);
+    } else {
+      printf ("  je .Lelse%03d\n", Label);
+      gen (node->then);
+      printf ("  jmp .Lend%03d\n", Label);
+      printf (".Lelse%03d:\n", Label);
+      gen (node->els);
+      printf (".Lend%03d:\n", Label);
+    }
+    return;
+  case ND_WHILE:
+    Label = L_count++;
+    printf (".Lbegin%03d:\n", Label);
+    gen (node->cond);
+    printf ("  pop rax\n");
+    printf ("  cmp rax, 0\n");
+    printf ("  je .Lend%03d\n", Label);
+    gen (node->body);
+    printf ("  jmp .Lbegin%03d\n", Label);
+    printf (".Lend%03d:\n", Label);
+    return;
+  case ND_FOR:
+    Label = L_count++;
+    if (node->init != NULL)
+      gen (node->init);
+    printf (".Lbegin%03d:\n", Label);
+    //if (node->cond != NULL)
+    gen (node->cond);
+    printf ("  pop rax\n");
+    printf ("  cmp rax, 0\n");
+    printf ("  je .Lend%03d\n", Label);
+    gen (node->body);
+    gen (node->inc);
+    printf ("  jmp .Lbegin%03d\n", Label);
+    printf (".Lend%03d:\n", Label);
     return;
   }
 

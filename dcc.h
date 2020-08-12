@@ -16,8 +16,13 @@ typedef enum {
   TK_IDENT,	// identifier
   TK_NUM, 	// number
   TK_RETURN,	// return
+  TK_IF,	// if
+  TK_ELSE,	// else
+  TK_WHILE,	// while
+  TK_FOR,	// for
   TK_EOF,	// End of File
 } TokenKind;
+
 
 // Token type
 typedef struct Token Token;
@@ -32,7 +37,7 @@ struct Token {
 void error (char *fmt, ...);
 void error_at (char *loc, char *fmt, ...);
 bool consume (char *op);
-bool consume_return ();
+Token *consume_keyword();
 Token *consume_ident ();
 void expect (char *op);
 int expect_number ();
@@ -42,6 +47,7 @@ void print_tokens (Token *head);
 
 extern char *user_input;
 extern Token *token;
+extern char *TokenKindStr [];
 
 
 /*
@@ -71,6 +77,13 @@ typedef enum {
   ND_LVAR,	// Local variable
   ND_NUM,	// Integer
   ND_RETURN,	// return
+  ND_IF,	// if
+  ND_ELSE,	// else
+  ND_WHILE,	// while
+  ND_FOR,	// for
+  ND_DO,	// do
+  ND_SWITCH,	// switch
+  ND_CASE,	// case
 } NodeKind;
 
 
@@ -78,8 +91,19 @@ typedef enum {
 typedef struct Node Node;
 struct Node {
   NodeKind kind;
+
   Node *lhs;	// left-hand side
   Node *rhs;	// right-hand side
+
+  // "if", "while", or "for" statement
+  Node *cond;
+  Node *then;
+  Node *els;
+  Node *init;
+  Node *inc;
+
+  Node *body;
+
   int val;	// used if kind == ND_NUM
   int offset;	// used if kind == ND_LVAR
 };
