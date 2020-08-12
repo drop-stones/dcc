@@ -16,9 +16,6 @@ LVar *locals;
 
 // find local variable
 LVar *find_lvar (Token *tok) {
-  if (locals == NULL)
-    locals = calloc (1, sizeof (LVar));
-
   for (LVar *var = locals; var != NULL; var = var->next)
     if (var->len == tok->len && !strncmp (tok->str, var->name, var->len))
       return var;
@@ -43,6 +40,10 @@ Node *new_node_num (int val) {
 
 void program () {
   int i = 0;
+
+  if (locals == NULL)
+    locals = calloc (1, sizeof (Node));
+
   while (!at_eof ())
     code [i++] = stmt ();
   code [i] = NULL;
@@ -98,6 +99,17 @@ Node *stmt () {
       }
       node->body = stmt ();
     }
+  } else if (consume ("{")) {
+    Node head = {};
+    Node *cur = &head;
+
+    while (!consume ("}")) {
+      cur->next = stmt ();
+      cur = cur->next;
+    }
+    node = calloc (1, sizeof (Node));
+    node->kind = ND_BLOCK;
+    node->body = head.next;
   } else {
     node = expr ();
     expect (";");

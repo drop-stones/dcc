@@ -20,7 +20,7 @@ main (int argc, char *argv [])
   // prologue
   printf ("  push rbp\n");
   printf ("  mov rbp, rsp\n");
-  printf ("  sub rsp, 208\n");
+  printf ("  sub rsp, %d\n", locals->offset);
 
   for (int i = 0; code [i] != NULL; i++) {
     gen (code [i]);

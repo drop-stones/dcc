@@ -60,4 +60,7 @@ assert 1 "if (1) return 1; else return 2;"
 assert 5 "x=0; while(x<5) x=x+1;"
 assert 10 "x=0; for (i=0; i<5; i=i+1) x=x+i; x=x;"
 
+assert 10 "x=0; for (i=0; i<5; i=i+1) {x=x+i;} return x;"
+
+
 echo OK

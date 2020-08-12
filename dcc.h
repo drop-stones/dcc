@@ -84,6 +84,7 @@ typedef enum {
   ND_DO,	// do
   ND_SWITCH,	// switch
   ND_CASE,	// case
+  ND_BLOCK,	// {}
 } NodeKind;
 
 
@@ -103,6 +104,7 @@ struct Node {
   Node *inc;
 
   Node *body;
+  Node *next;
 
   int val;	// used if kind == ND_NUM
   int offset;	// used if kind == ND_LVAR
@@ -112,7 +114,7 @@ struct Node {
 void program ();
 
 extern Node *code [100];
-
+extern LVar *locals;
 
 /*
  *  codegen.c
