@@ -1,7 +1,7 @@
 #include "dcc.h"
 
-char *func_arg_reg [] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
-int L_count = 0;
+char *argreg8 [] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+int labelseq = 0;
 
 
 void gen_lval (Node *node) {
@@ -17,8 +17,6 @@ void gen (Node *node) {
   if (node == NULL)
     exit (1);
 
-  int Label, i;
-  Node *cur;
   switch (node->kind) {
   case ND_NUM:
     printf ("  push %d\n", node->val);
@@ -46,50 +44,53 @@ void gen (Node *node) {
     printf ("  pop rbp\n");
     printf ("  ret\n");
     return;
-  case ND_IF:
-    Label = L_count++;
+  case ND_IF: {
+    int seq = labelseq++;
     gen (node->cond);
     printf ("  pop rax\n");
     printf ("  cmp rax, 0\n");
     if (node->els == NULL) {
-      printf ("  je .Lend%03d\n", Label);
+      printf ("  je .Lend%03d\n", seq);
       gen (node->then);
-      printf (".Lend%03d:\n", Label);
+      printf (".Lend%03d:\n", seq);
     } else {
-      printf ("  je .Lelse%03d\n", Label);
+      printf ("  je .Lelse%03d\n", seq);
       gen (node->then);
-      printf ("  jmp .Lend%03d\n", Label);
-      printf (".Lelse%03d:\n", Label);
+      printf ("  jmp .Lend%03d\n", seq);
+      printf (".Lelse%03d:\n", seq);
       gen (node->els);
-      printf (".Lend%03d:\n", Label);
+      printf (".Lend%03d:\n", seq);
     }
     return;
-  case ND_WHILE:
-    Label = L_count++;
-    printf (".Lbegin%03d:\n", Label);
+  }
+  case ND_WHILE: {
+    int seq = labelseq++;
+    printf (".Lbegin%03d:\n", seq);
     gen (node->cond);
     printf ("  pop rax\n");
     printf ("  cmp rax, 0\n");
-    printf ("  je .Lend%03d\n", Label);
+    printf ("  je .Lend%03d\n", seq);
     gen (node->body);
-    printf ("  jmp .Lbegin%03d\n", Label);
-    printf (".Lend%03d:\n", Label);
+    printf ("  jmp .Lbegin%03d\n", seq);
+    printf (".Lend%03d:\n", seq);
     return;
-  case ND_FOR:
-    Label = L_count++;
+  }
+  case ND_FOR: {
+    int seq = labelseq++;
     if (node->init != NULL)
       gen (node->init);
-    printf (".Lbegin%03d:\n", Label);
+    printf (".Lbegin%03d:\n", seq);
     //if (node->cond != NULL)
     gen (node->cond);
     printf ("  pop rax\n");
     printf ("  cmp rax, 0\n");
-    printf ("  je .Lend%03d\n", Label);
+    printf ("  je .Lend%03d\n", seq);
     gen (node->body);
     gen (node->inc);
-    printf ("  jmp .Lbegin%03d\n", Label);
-    printf (".Lend%03d:\n", Label);
+    printf ("  jmp .Lbegin%03d\n", seq);
+    printf (".Lend%03d:\n", seq);
     return;
+  }
   case ND_BLOCK:
     while (node->body != NULL) {
       gen (node->body);
@@ -97,15 +98,37 @@ void gen (Node *node) {
       node->body = node->body->next;
     }
     return;
-  case ND_FUNCALL:
+  case ND_FUNCALL: {
     // argument
-    cur = node->args;
-    for (i = 0; cur; i++) {
-      printf ("  mov %s, %d\n", func_arg_reg [i], cur->val);
-      cur = cur->next;
+    int nargs = 0;
+    for (Node *arg = node->args; arg; arg = arg->next) {
+      gen (arg);
+      nargs++;
     }
+
+    // Assume: args <= 6
+    for (int i = nargs - 1; i >= 0; i--)
+      printf ("  pop %s\n", argreg8 [i]);
+
+    // We need to align rsp to a 16 byte boundary before
+    // calling a function because of an ABI requirement.
+    int seq = labelseq++;
+    printf ("  mov rax, rsp\n");
+    printf ("  and rax, 15\n");
+    printf ("  jnz .L.call.%d\n", seq);
+    printf ("  mov rax, 0\n");
     printf ("  call %s\n", node->funcname);
+    printf ("  jmp .L.end.%d\n", seq);
+    printf (".L.call.%d:\n", seq);
+    printf ("  sub rsp, 8\n");
+    printf ("  mov rax, 0\n");
+    printf ("  call %s\n", node->funcname);
+    printf ("  add rsp, 8\n");
+    printf (".L.end.%d:\n", seq);
+    printf ("  push rax\n");
+
     return;
+  }
   }
 
   gen (node->lhs);
