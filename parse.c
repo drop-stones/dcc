@@ -202,6 +202,44 @@ Node *primary () {
     expect (")");
     return node;
   } else if ((tok = consume_ident ()) != NULL) {
+    // Function call
+    if (consume ("(")) {
+      node = calloc (1, sizeof (Node));
+      node->funcname = strndup (tok->str, tok->len);
+      node->kind = ND_FUNCALL;
+
+      LVar *lvar = find_lvar (tok);
+      if (lvar != NULL) {
+        // the lvar exists
+        node->offset = lvar->offset;
+      } else {
+        // the lvar doesn't exist
+        lvar = calloc (1, sizeof (LVar));
+        lvar->next = locals;
+        lvar->name = strndup (tok->str, tok->len);
+        lvar->len  = tok->len;
+        lvar->offset = locals->offset + 8;
+        node->offset = lvar->offset;
+        locals = lvar;
+      } 
+
+      Node *cur;
+      for (int i = 0; i < 6 && !consume (")"); i++) {
+        if (node->args == NULL) {
+          node->args = new_node_num (expect_number ());
+          cur  = node->args;
+          consume (",");
+          continue;
+        }
+        cur->next = new_node_num (expect_number ());
+        cur = cur->next;
+        consume (",");
+      }
+
+      return node;
+    }
+
+    // Variable
     node = calloc (1, sizeof (Node));
     node->kind = ND_LVAR;
 
@@ -213,7 +251,7 @@ Node *primary () {
       // the lvar doesn't exist
       lvar = calloc (1, sizeof (LVar));
       lvar->next = locals;
-      lvar->name = tok->str;
+      lvar->name = strndup (tok->str, tok->len);
       lvar->len  = tok->len;
       lvar->offset = locals->offset + 8;
       node->offset = lvar->offset;

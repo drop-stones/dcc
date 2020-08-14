@@ -1,6 +1,8 @@
 #include "dcc.h"
 
+char *func_arg_reg [] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
 int L_count = 0;
+
 
 void gen_lval (Node *node) {
   if (node->kind != ND_LVAR)
@@ -15,7 +17,8 @@ void gen (Node *node) {
   if (node == NULL)
     exit (1);
 
-  int Label;
+  int Label, i;
+  Node *cur;
   switch (node->kind) {
   case ND_NUM:
     printf ("  push %d\n", node->val);
@@ -93,6 +96,15 @@ void gen (Node *node) {
       printf ("  pop rax\n");
       node->body = node->body->next;
     }
+    return;
+  case ND_FUNCALL:
+    // argument
+    cur = node->args;
+    for (i = 0; cur; i++) {
+      printf ("  mov %s, %d\n", func_arg_reg [i], cur->val);
+      cur = cur->next;
+    }
+    printf ("  call %s\n", node->funcname);
     return;
   }
 

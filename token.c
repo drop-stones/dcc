@@ -112,7 +112,7 @@ Token *tokenize (char *p) {
       cur = new_token (TK_RESERVED, cur, p);
       cur->len = 2;
       p += 2;
-    } else if (strchr ("+-*/()<>=;{}", *p)) {
+    } else if (strchr ("+-*/()<>=;{},", *p)) {
       cur = new_token (TK_RESERVED, cur, p++);
       cur->len = 1;
     } else if (strncmp (p, "return", 6) == 0 && !isalnum (p[6])) {
@@ -139,6 +139,7 @@ Token *tokenize (char *p) {
       cur = new_token (TK_NUM, cur, p);
       cur->val = strtol (p, &p, 10);
     } else if (isalpha (*p)) {
+      // ident
       char *q = p++;
       while (isalnum (*p))
         p++;

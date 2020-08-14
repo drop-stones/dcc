@@ -5,7 +5,7 @@ assert () {
   input="$2"
 
   ./dcc "$input" > tmp.s
-  gcc -o tmp tmp.s
+  cc -o tmp tmp.s
   ./tmp
   actual="$?"
 
@@ -15,6 +15,16 @@ assert () {
     echo "$input => $expected expected, but got $actual"
     exit 1
   fi
+}
+
+assert_link () {
+  expected="$1"
+  input="$2"
+  linked="$3"
+
+  ./dcc "$input" > tmp.s
+  cc -o tmp tmp.s "$linked"
+  ./tmp
 }
 
 #assert 0 0
@@ -62,5 +72,6 @@ assert 10 "x=0; for (i=0; i<5; i=i+1) x=x+i; x=x;"
 
 assert 10 "x=0; for (i=0; i<5; i=i+1) {x=x+i;} return x;"
 
+assert_link 0 "foo (1,2,3,4);" foo.o
 
 echo OK

@@ -75,6 +75,7 @@ typedef enum {
   ND_LE,	// <=
   ND_ASSIGN,	// =
   ND_LVAR,	// Local variable
+  ND_FUNCALL,	// function call
   ND_NUM,	// Integer
   ND_RETURN,	// return
   ND_IF,	// if
@@ -92,6 +93,7 @@ typedef enum {
 typedef struct Node Node;
 struct Node {
   NodeKind kind;
+  Node *next;
 
   Node *lhs;	// left-hand side
   Node *rhs;	// right-hand side
@@ -104,7 +106,10 @@ struct Node {
   Node *inc;
 
   Node *body;
-  Node *next;
+
+  // used if kind == FUNCALL
+  char *funcname;
+  Node *args;
 
   int val;	// used if kind == ND_NUM
   int offset;	// used if kind == ND_LVAR
