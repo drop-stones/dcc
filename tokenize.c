@@ -1,5 +1,10 @@
 #include "dcc.h"
 
+char *TokenKindStr [] = {
+  "RESERVED", "IDENT", "NUM", "RETURN", "IF", "ELSE",
+  "WHILE", "FOR", "EOF",
+};
+
 Token *token;
 char *user_input;
 
@@ -33,10 +38,22 @@ void error_at (char *loc, char *fmt, ...) {
 bool consume (char *op) {
   if (token->kind != TK_RESERVED ||
       strlen (op) != token->len  ||
-      memcmp (token->str, op, token->len))
+      strncmp (token->str, op, token->len))
     return false;
   token = token->next;
   return true;
+}
+
+Token *consume_keyword () {
+  if (token->kind != TK_RETURN &&
+      token->kind != TK_IF     &&
+      token->kind != TK_ELSE   &&
+      token->kind != TK_WHILE  &&
+      token->kind != TK_FOR)
+    return NULL;
+  Token *tok_kw = token;
+  token = token->next;
+  return tok_kw;
 }
 
 Token *consume_ident () {
@@ -63,6 +80,16 @@ int expect_number () {
   int val = token->val;
   token = token->next;
   return val;
+}
+
+// Ensure that the currect token is TK_IDENT.
+// Return the ident name.
+char *expect_ident (void) {
+  if (token->kind != TK_IDENT)
+    error_at (token->str, "expected an identifier");
+  char *s = strndup (token->str, token->len);
+  token = token->next;
+  return s;
 }
 
 bool at_eof () {
@@ -95,15 +122,39 @@ Token *tokenize (char *p) {
       cur = new_token (TK_RESERVED, cur, p);
       cur->len = 2;
       p += 2;
-    } else if (strchr ("+-*/()<>=;", *p)) {
+    } else if (strchr ("+-*/()<>=;{},", *p)) {
       cur = new_token (TK_RESERVED, cur, p++);
       cur->len = 1;
+    } else if (strncmp (p, "return", 6) == 0 && !isalnum (p[6])) {
+      cur = new_token (TK_RETURN, cur, p);
+      cur->len = 6;
+      p += 6;
+    } else if (strncmp (p, "if", 2) == 0 && !isalnum (p[2])) {
+      cur = new_token (TK_IF, cur, p);
+      cur->len = 2;
+      p += 2;
+    } else if (strncmp (p, "else", 4) == 0 && !isalnum (p[4])) {
+      cur = new_token (TK_ELSE, cur, p);
+      cur->len = 4;
+      p += 4;
+    } else if (strncmp (p, "while", 5) == 0 && !isalnum (p[5])) {
+      cur = new_token (TK_WHILE, cur, p);
+      cur->len = 5;
+      p += 5;
+    } else if (strncmp (p, "for", 3) == 0 && !isalnum (p[3])) {
+      cur = new_token (TK_FOR, cur, p);
+      cur->len = 3;
+      p += 3;
     } else if (isdigit (*p)) {
       cur = new_token (TK_NUM, cur, p);
       cur->val = strtol (p, &p, 10);
-    } else if ('a' <= *p && *p <= 'z') {
-      cur = new_token (TK_IDENT, cur, p++);
-      cur->len = 1;
+    } else if (isalpha (*p)) {
+      // ident
+      char *q = p++;
+      while (isalnum (*p))
+        p++;
+      cur = new_token (TK_IDENT, cur, q);
+      cur->len = p - q;
     } else {
       error_at (p, "invalid token\n");
     }
@@ -113,27 +164,15 @@ Token *tokenize (char *p) {
   return head.next;
 }
 
-char *getTokenKind (Token *token) {
-  if (token == NULL)
-    return "NULL";
-
-  switch (token->kind) {
-  case TK_RESERVED: return "TK_RESERVED";
-  case TK_IDENT   : return "TK_IDENT";
-  case TK_NUM     : return "TK_NUM";
-  case TK_EOF     : return "TK_EOF";
-  }
-  return "error";
-}
 
 void print_tokens (Token *head) {
   if (head == NULL)
     return;
 
-  printf ("%s", getTokenKind (head));
+  printf ("%s", TokenKindStr [head->kind]);
   Token *cur = head->next;
   while (cur != NULL) {
-    printf (" -> %s", getTokenKind (cur));
+    printf (" -> %s", TokenKindStr [cur->kind]);
     cur = cur->next;
   }
   printf ("\n");

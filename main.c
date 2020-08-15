@@ -11,28 +11,18 @@ main (int argc, char *argv [])
 
   user_input = argv [1];
   token = tokenize (user_input);
-  program ();
+  Function *prog = program ();
 
-  printf (".intel_syntax noprefix\n");
-  printf (".globl main\n");
-  printf ("main:\n");
-
-  // prologue
-  printf ("  push rbp\n");
-  printf ("  mov rbp, rsp\n");
-  printf ("  sub rsp, %d\n", locals->offset);
-
-  for (int i = 0; code [i] != NULL; i++) {
-    gen (code [i]);
-
-    // pop result of statement
-    printf ("  pop rax\n");
+  for (Function *fn = prog; fn; fn = fn->next) {
+    int offset = 0;
+    for (LVar *lvar = prog->locals; lvar; lvar = lvar->next) {
+      offset += 8;
+      lvar->offset = offset;
+    }
+    fn->stack_size = offset;
   }
 
-  // epilogue
-  printf ("  mov rsp, rbp\n");
-  printf ("  pop rbx\n");
-  printf ("  ret\n");
+  codegen (prog);
 
   return 0;
 }

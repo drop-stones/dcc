@@ -1,15 +1,39 @@
 #include "dcc.h"
 
-char *argreg8 [] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
-int labelseq = 0;
+static char *argreg8 [] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
 
+static int labelseq = 0;
+static char *funcname;
+
+// Pushes the given node's address to the stack.
+static void gen_addr (Node *node) {
+  if (node->kind != ND_LVAR)
+    error ("not an lvalue\n");
+
+  printf ("  lea rax, [rbp-%d]\n", node->lvar->offset);
+  printf ("  push rax\n");
+  return;
+}
+
+static void load (void) {
+  printf ("  pop rax\n");
+  printf ("  mov rax, [rax]\n");
+  printf ("  push rax\n");
+}
+
+static void store (void) {
+  printf ("  pop rdi\n");
+  printf ("  pop rax\n");
+  printf ("  mov [rax], rdi\n");
+  printf ("  push rdi\n");
+}
 
 void gen_lval (Node *node) {
   if (node->kind != ND_LVAR)
     error ("Left value is not variable in assinment\n");
 
   printf ("  mov rax, rbp\n");
-  printf ("  sub rax, %d\n", node->offset);
+  printf ("  sub rax, %d\n", node->lvar->offset);
   printf ("  push rax\n");
 }
 
@@ -21,39 +45,32 @@ void gen (Node *node) {
   case ND_NUM:
     printf ("  push %d\n", node->val);
     return;
+  case ND_EXPR_STMT:
+    gen (node->lhs);
+    printf ("  add rsp, 8\n"); // pop the stack top
+    return;
   case ND_LVAR:
-    gen_lval (node);
-    printf ("  pop rax\n");
-    printf ("  mov rax, [rax]\n");
-    printf ("  push rax\n");
+    gen_addr (node);
+    load ();
     return;
   case ND_ASSIGN:
-    gen_lval (node->lhs);
+    gen_addr (node->lhs);
     gen (node->rhs);
-
-    printf ("  pop rdi\n");
-    printf ("  pop rax\n");
-    printf ("  mov [rax], rdi\n");
-    printf ("  push rdi\n");
-    return;
-  case ND_RETURN:
-    gen (node->lhs);
-
-    printf ("  pop rax\n");
-    printf ("  mov rsp, rbp\n");
-    printf ("  pop rbp\n");
-    printf ("  ret\n");
+    store ();
     return;
   case ND_IF: {
     int seq = labelseq++;
-    gen (node->cond);
-    printf ("  pop rax\n");
-    printf ("  cmp rax, 0\n");
     if (node->els == NULL) {
+      gen (node->cond);
+      printf ("  pop rax\n");
+      printf ("  cmp rax, 0\n");
       printf ("  je .Lend%03d\n", seq);
       gen (node->then);
       printf (".Lend%03d:\n", seq);
     } else {
+      gen (node->cond);
+      printf ("  pop rax\n");
+      printf ("  cmp rax, 0\n");
       printf ("  je .Lelse%03d\n", seq);
       gen (node->then);
       printf ("  jmp .Lend%03d\n", seq);
@@ -70,7 +87,7 @@ void gen (Node *node) {
     printf ("  pop rax\n");
     printf ("  cmp rax, 0\n");
     printf ("  je .Lend%03d\n", seq);
-    gen (node->body);
+    gen (node->then);
     printf ("  jmp .Lbegin%03d\n", seq);
     printf (".Lend%03d:\n", seq);
     return;
@@ -80,23 +97,22 @@ void gen (Node *node) {
     if (node->init != NULL)
       gen (node->init);
     printf (".Lbegin%03d:\n", seq);
-    //if (node->cond != NULL)
-    gen (node->cond);
-    printf ("  pop rax\n");
-    printf ("  cmp rax, 0\n");
-    printf ("  je .Lend%03d\n", seq);
-    gen (node->body);
-    gen (node->inc);
+    if (node->cond != NULL) {
+      gen (node->cond);
+      printf ("  pop rax\n");
+      printf ("  cmp rax, 0\n");
+      printf ("  je .Lend%03d\n", seq);
+    }
+    gen (node->then);
+    if (node->inc != NULL)
+      gen (node->inc);
     printf ("  jmp .Lbegin%03d\n", seq);
     printf (".Lend%03d:\n", seq);
     return;
   }
   case ND_BLOCK:
-    while (node->body != NULL) {
-      gen (node->body);
-      printf ("  pop rax\n");
-      node->body = node->body->next;
-    }
+    for (Node *n = node->body; n; n = n->next)
+      gen (n);
     return;
   case ND_FUNCALL: {
     // argument
@@ -129,6 +145,11 @@ void gen (Node *node) {
 
     return;
   }
+  case ND_RETURN:
+    gen (node->lhs);
+    printf ("  pop rax\n");
+    printf ("  jmp .L.return.%s\n", funcname);
+    return;
   }
 
   gen (node->lhs);
@@ -176,5 +197,28 @@ void gen (Node *node) {
   printf ("  push rax\n");
 }
 
+void codegen (Function *prog) {
+  printf (".intel_syntax noprefix\n");
 
+  for (Function *fn = prog; fn; fn = fn->next) {
+    printf (".global %s\n", fn->name);
+    printf ("%s:\n", fn->name);
+    funcname = fn->name;
+
+    // Prologue
+    printf ("  push rbp\n");
+    printf ("  mov rbp, rsp\n");
+    printf ("  sub rsp, %d\n", fn->stack_size);
+
+    // Emit code
+    for (Node *node = fn->node; node; node = node->next)
+      gen (node);
+
+    // Epilogue
+    printf (".L.return.%s:\n", funcname);
+    printf ("  mov rsp, rbp\n");
+    printf ("  pop rbp\n");
+    printf ("  ret\n");
+  }
+}
 

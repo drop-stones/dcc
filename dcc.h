@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -6,9 +7,9 @@
 #include <string.h>
 
 
-/*
- *  tokenize.c
- */
+//
+// tokenize.c
+//
 
 // Token
 typedef enum {
@@ -41,6 +42,7 @@ Token *consume_keyword();
 Token *consume_ident ();
 void expect (char *op);
 int expect_number ();
+char *expect_ident ();
 bool at_eof ();
 Token *tokenize (char *p);
 void print_tokens (Token *head);
@@ -54,12 +56,11 @@ extern char *TokenKindStr [];
  *  parse.c
  */
 
-// Local variable type
+// Local variable
 typedef struct LVar LVar;
 struct LVar {
   LVar *next;	// next variable
   char *name;
-  int  len;
   int offset;	// offset from rbp
 };
 
@@ -86,6 +87,7 @@ typedef enum {
   ND_SWITCH,	// switch
   ND_CASE,	// case
   ND_BLOCK,	// {}
+  ND_EXPR_STMT,	// expression statement
 } NodeKind;
 
 
@@ -112,17 +114,27 @@ struct Node {
   Node *args;
 
   int val;	// used if kind == ND_NUM
-  int offset;	// used if kind == ND_LVAR
+  LVar *lvar;	// used if kind == ND_LVAR
 };
 
-//Node *expr ();
-void program ();
 
-extern Node *code [100];
-extern LVar *locals;
+typedef struct Function Function;
+struct Function {
+  Function *next;
+  char *name;
+
+  Node *node;
+  LVar *locals;
+  int stack_size;
+};
+
+Function *program ();
+
+//extern Node *code [100];
+//extern LVar *locals;
 
 /*
  *  codegen.c
  */
 
-void gen (Node *node);
+void codegen (Function *prog);
