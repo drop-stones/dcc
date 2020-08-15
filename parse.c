@@ -1,16 +1,17 @@
 #include "dcc.h"
 
-//Node *code [100];
 
 // All local variable instances created during parsing are
 // accumulated to this list.
-LVar *locals;
+static VarList *locals;
 
-// find local variable by name.
-static LVar *find_lvar (Token *tok) {
-  for (LVar *var = locals; var != NULL; var = var->next)
+// find a local variable by name.
+static Var *find_var (Token *tok) {
+  for (VarList *vl = locals; vl; vl = vl->next) {
+    Var *var = vl->var;
     if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
       return var;
+  }
   return NULL;
 }
 
@@ -42,19 +43,21 @@ static Node *new_num (int val) {
   return node;
 }
 
-static Node *new_var_node (LVar *lvar) {
-  Node *node = new_node (ND_LVAR);
-  node->lvar = lvar;
+static Node *new_var_node (Var *var) {
+  Node *node = new_node (ND_VAR);
+  node->var = var;
   return node;
 }
 
-static LVar *new_lvar (char *name) {
-  LVar *lvar = calloc (1, sizeof (LVar));
-  lvar->next = locals;
-  lvar->name = name;
-  //lvar->offset = locals->offset + 8;
-  locals = lvar;
-  return lvar;
+static Var *new_lvar (char *name) {
+  Var *var = calloc (1, sizeof (Var));
+  var->name = name;
+
+  VarList *vl = calloc (1, sizeof (VarList));
+  vl->var = var;
+  vl->next = locals;
+  locals = vl;
+  return var;
 }
 
 static Function *function (void);
@@ -82,12 +85,33 @@ Function *program (void) {
   return head.next;
 }
 
+static VarList *read_func_params (void) {
+  if (consume (")"))
+    return NULL;
+
+  VarList *head = calloc (1, sizeof (VarList));
+  head->var = new_lvar (expect_ident ());
+  VarList *cur = head;
+
+  while (!consume (")")) {
+    expect (",");
+    cur->next = calloc (1, sizeof (VarList));
+    cur->next->var = new_lvar (expect_ident ());
+    cur = cur->next;
+  }
+
+  return head;
+}
+
+// function = ident "(" params? ")" "{" stmt* "}"
+// params   = ident ("," ident)*
 static Function *function (void) {
   locals = NULL;
 
-  char *name = expect_ident ();
+  Function *fn = calloc (1, sizeof (Function));
+  fn->name = expect_ident ();
   expect ("(");
-  expect (")");
+  fn->params = read_func_params ();
   expect ("{");
 
   Node head = {};
@@ -98,8 +122,6 @@ static Function *function (void) {
     cur = cur->next;
   }
 
-  Function *fn = calloc (1, sizeof (Function));
-  fn->name = name;
   fn->node = head.next;
   fn->locals = locals;
   return fn;
@@ -296,10 +318,10 @@ Node *primary () {
     }
 
     // Variable
-    LVar *lvar = find_lvar (tok);
-    if (!lvar)
-      lvar = new_lvar (strndup (tok->str, tok->len));
-    return new_var_node (lvar);
+    Var *var = find_var (tok);
+    if (!var)
+      var = new_lvar (strndup (tok->str, tok->len));
+    return new_var_node (var);
   } else {
     return new_num (expect_number ());
   }

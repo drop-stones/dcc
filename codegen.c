@@ -1,16 +1,16 @@
 #include "dcc.h"
 
-static char *argreg8 [] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+static char *argreg [] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
 
 static int labelseq = 0;
 static char *funcname;
 
 // Pushes the given node's address to the stack.
 static void gen_addr (Node *node) {
-  if (node->kind != ND_LVAR)
+  if (node->kind != ND_VAR)
     error ("not an lvalue\n");
 
-  printf ("  lea rax, [rbp-%d]\n", node->lvar->offset);
+  printf ("  lea rax, [rbp-%d]\n", node->var->offset);
   printf ("  push rax\n");
   return;
 }
@@ -29,11 +29,11 @@ static void store (void) {
 }
 
 void gen_lval (Node *node) {
-  if (node->kind != ND_LVAR)
+  if (node->kind != ND_VAR)
     error ("Left value is not variable in assinment\n");
 
   printf ("  mov rax, rbp\n");
-  printf ("  sub rax, %d\n", node->lvar->offset);
+  printf ("  sub rax, %d\n", node->var->offset);
   printf ("  push rax\n");
 }
 
@@ -49,7 +49,7 @@ void gen (Node *node) {
     gen (node->lhs);
     printf ("  add rsp, 8\n"); // pop the stack top
     return;
-  case ND_LVAR:
+  case ND_VAR:
     gen_addr (node);
     load ();
     return;
@@ -124,7 +124,7 @@ void gen (Node *node) {
 
     // Assume: args <= 6
     for (int i = nargs - 1; i >= 0; i--)
-      printf ("  pop %s\n", argreg8 [i]);
+      printf ("  pop %s\n", argreg [i]);
 
     // We need to align rsp to a 16 byte boundary before
     // calling a function because of an ABI requirement.
@@ -209,6 +209,13 @@ void codegen (Function *prog) {
     printf ("  push rbp\n");
     printf ("  mov rbp, rsp\n");
     printf ("  sub rsp, %d\n", fn->stack_size);
+
+    // Push arguments to the stack
+    int i = 0;
+    for (VarList *vl = fn->params; vl; vl = vl->next) {
+      Var *var = vl->var;
+      printf ("  mov [rbp-%d], %s\n", var->offset, argreg [i++]);
+    }
 
     // Emit code
     for (Node *node = fn->node; node; node = node->next)

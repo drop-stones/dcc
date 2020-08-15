@@ -57,11 +57,16 @@ extern char *TokenKindStr [];
  */
 
 // Local variable
-typedef struct LVar LVar;
-struct LVar {
-  LVar *next;	// next variable
+typedef struct Var Var;
+struct Var {
   char *name;
-  int offset;	// offset from rbp
+  int offset;
+};
+
+typedef struct VarList VarList;
+struct VarList {
+  VarList *next;
+  Var *var;
 };
 
 // AST node
@@ -75,7 +80,7 @@ typedef enum {
   ND_LT,	// <
   ND_LE,	// <=
   ND_ASSIGN,	// =
-  ND_LVAR,	// Local variable
+  ND_VAR,	// Local variable
   ND_FUNCALL,	// function call
   ND_NUM,	// Integer
   ND_RETURN,	// return
@@ -114,7 +119,7 @@ struct Node {
   Node *args;
 
   int val;	// used if kind == ND_NUM
-  LVar *lvar;	// used if kind == ND_LVAR
+  Var *var;	// used if kind == ND_LVAR
 };
 
 
@@ -122,16 +127,14 @@ typedef struct Function Function;
 struct Function {
   Function *next;
   char *name;
+  VarList *params;
 
   Node *node;
-  LVar *locals;
+  VarList *locals;
   int stack_size;
 };
 
 Function *program ();
-
-//extern Node *code [100];
-//extern LVar *locals;
 
 /*
  *  codegen.c
