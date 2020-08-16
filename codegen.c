@@ -5,14 +5,21 @@ static char *argreg [] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
 static int labelseq = 0;
 static char *funcname;
 
+static void gen (Node *node);
+
 // Pushes the given node's address to the stack.
 static void gen_addr (Node *node) {
-  if (node->kind != ND_VAR)
-    error ("not an lvalue\n");
+  switch (node->kind) {
+  case ND_VAR:
+    printf ("  lea rax, [rbp-%d]\n", node->var->offset);
+    printf ("  push rax\n");
+    return;
+  case ND_DEREF:
+    gen (node->lhs);
+    return;
+  }
 
-  printf ("  lea rax, [rbp-%d]\n", node->var->offset);
-  printf ("  push rax\n");
-  return;
+  error ("not an lvalue\n");
 }
 
 static void load (void) {
@@ -28,16 +35,16 @@ static void store (void) {
   printf ("  push rdi\n");
 }
 
-void gen_lval (Node *node) {
-  if (node->kind != ND_VAR)
-    error ("Left value is not variable in assinment\n");
+//void gen_lval (Node *node) {
+//  if (node->kind != ND_VAR)
+//    error ("Left value is not variable in assinment\n");
+//
+//  printf ("  mov rax, rbp\n");
+//  printf ("  sub rax, %d\n", node->var->offset);
+//  printf ("  push rax\n");
+//}
 
-  printf ("  mov rax, rbp\n");
-  printf ("  sub rax, %d\n", node->var->offset);
-  printf ("  push rax\n");
-}
-
-void gen (Node *node) {
+static void gen (Node *node) {
   if (node == NULL)
     exit (1);
 
@@ -57,6 +64,13 @@ void gen (Node *node) {
     gen_addr (node->lhs);
     gen (node->rhs);
     store ();
+    return;
+  case ND_ADDR:
+    gen_addr (node->lhs);
+    return;
+  case ND_DEREF:
+    gen (node->lhs);
+    load ();
     return;
   case ND_IF: {
     int seq = labelseq++;

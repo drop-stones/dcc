@@ -79,6 +79,8 @@ typedef enum {
   ND_NE,	// !=
   ND_LT,	// <
   ND_LE,	// <=
+  ND_ADDR,	// unary &
+  ND_DEREF,	// unary *
   ND_ASSIGN,	// =
   ND_VAR,	// Local variable
   ND_FUNCALL,	// function call

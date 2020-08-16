@@ -274,12 +274,16 @@ Node *mul () {
   }
 }
 
-// unary = ("+" | "-")? unary
+// unary = ("+" | "-" | "*" | "&")? unary
 Node *unary () {
   if (consume ("+"))
     return primary ();
   if (consume ("-"))
     return new_binary (ND_SUB, new_num (0), primary ());
+  if (consume ("*"))
+    return new_unary (ND_DEREF, unary ());
+  if (consume ("&"))
+    return new_unary (ND_ADDR, unary ());
   return primary ();
 }
 
