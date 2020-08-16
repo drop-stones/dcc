@@ -34,14 +34,24 @@ void error_at (char *loc, char *fmt, ...) {
   exit (1);
 }
 
+// Check whether the currect token matches a given string.
+Token *peek (char *s) {
+  if (token->kind != TK_RESERVED ||
+      strlen (s)  != token->len  ||
+      strncmp (token->str, s, token->len))
+    return NULL;
+  return token;
+}
+
 // consume one Token from Token sequence
-bool consume (char *op) {
+Token *consume (char *op) {
   if (token->kind != TK_RESERVED ||
       strlen (op) != token->len  ||
       strncmp (token->str, op, token->len))
-    return false;
+    return NULL;
+  Token *tok = token;
   token = token->next;
-  return true;
+  return tok;
 }
 
 Token *consume_keyword () {
@@ -66,9 +76,7 @@ Token *consume_ident () {
 
 // move to next Token from Token sequence
 void expect (char *op) {
-  if (token->kind != TK_RESERVED ||
-      strlen (op) != token->len  ||
-      memcmp (token->str, op, token->len))
+  if (!peek (op))
     error_at (token->str, "'%c' is wrong.", op);
   token = token->next;
 }
@@ -97,16 +105,50 @@ bool at_eof () {
 }
 
 // create new Token and append it to cur
-Token *new_token (TokenKind kind, Token *cur, char *str) {
+static Token *new_token (TokenKind kind, Token *cur, char *str, int len) {
   Token *tok = calloc (1, sizeof (Token));
   tok->kind = kind;
   tok->str  = str;
+  tok->len  = len;
   cur->next = tok;
   return tok;
 }
 
+static bool startswith (char *p, char *q) {
+  return strncmp (p, q, strlen (q)) == 0;
+}
+
+static bool is_alpha (char c) {
+  return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_';
+}
+
+static bool is_alnum (char c) {
+  return is_alpha (c) || ('0' <= c && c <= '9');
+}
+
+static char *starts_with_reserved (char *p) {
+  // Keyword
+  static char *kw [] = { "return", "if", "else", "while", "for", "int" };
+
+  for (int i = 0; i < sizeof (kw) / sizeof (*kw); i++) {
+    int len = strlen (kw [i]);
+    if (startswith (p, kw [i]) && !is_alnum (p [len]))
+      return kw [i];
+  }
+
+  // Multi-letter punctuator
+  static char *ops [] = { "==", "!=", "<=", ">=" };
+
+  for (int i = 0; i < sizeof (ops) / sizeof (*ops); i++)
+    if (startswith (p, ops [i]))
+      return ops [i];
+
+  return NULL;
+}
+
 // Tokenize string
 Token *tokenize (char *p) {
+  char *kw;
   Token head;
   head.next = NULL;
   Token *cur = &head;
@@ -115,52 +157,40 @@ Token *tokenize (char *p) {
     if (isspace (*p)) {
       // skip white space
       p++;
-    } else if (!strncmp (p, "<=", 2) ||
-               !strncmp (p, ">=", 2) ||
-               !strncmp (p, "==", 2) ||
-               !strncmp (p, "!=", 2)) {
-      cur = new_token (TK_RESERVED, cur, p);
-      cur->len = 2;
-      p += 2;
-    } else if (strchr ("+-*/&()<>=;{},", *p)) {
-      cur = new_token (TK_RESERVED, cur, p++);
-      cur->len = 1;
-    } else if (strncmp (p, "return", 6) == 0 && !isalnum (p[6])) {
-      cur = new_token (TK_RETURN, cur, p);
-      cur->len = 6;
-      p += 6;
-    } else if (strncmp (p, "if", 2) == 0 && !isalnum (p[2])) {
-      cur = new_token (TK_IF, cur, p);
-      cur->len = 2;
-      p += 2;
-    } else if (strncmp (p, "else", 4) == 0 && !isalnum (p[4])) {
-      cur = new_token (TK_ELSE, cur, p);
-      cur->len = 4;
-      p += 4;
-    } else if (strncmp (p, "while", 5) == 0 && !isalnum (p[5])) {
-      cur = new_token (TK_WHILE, cur, p);
-      cur->len = 5;
-      p += 5;
-    } else if (strncmp (p, "for", 3) == 0 && !isalnum (p[3])) {
-      cur = new_token (TK_FOR, cur, p);
-      cur->len = 3;
-      p += 3;
-    } else if (isdigit (*p)) {
-      cur = new_token (TK_NUM, cur, p);
-      cur->val = strtol (p, &p, 10);
-    } else if (isalpha (*p)) {
-      // ident
+//    } else if (!strncmp (p, "<=", 2) ||
+//               !strncmp (p, ">=", 2) ||
+//               !strncmp (p, "==", 2) ||
+//               !strncmp (p, "!=", 2)) {
+//      cur = new_token (TK_RESERVED, cur, p);
+//      cur->len = 2;
+//      p += 2;
+    } else if ((kw = starts_with_reserved (p)) != NULL) {
+      // Keywords or multi-letter punctuators
+      int len = strlen (kw);
+      cur = new_token (TK_RESERVED, cur, p, len);
+      p += len;
+    } else if (ispunct (*p)) {
+      // Single-letter punctuators
+      cur = new_token (TK_RESERVED, cur, p++, 1);
+    } else if (is_alpha (*p)) {
+      // identifier
       char *q = p++;
-      while (isalnum (*p))
+      while (is_alnum (*p))
         p++;
-      cur = new_token (TK_IDENT, cur, q);
+      cur = new_token (TK_IDENT, cur, q, p - q);
+    } else if (isdigit (*p)) {
+      // Integer literal
+      cur = new_token (TK_NUM, cur, p, 0);
+      char *q = p;
+      cur->val = strtol (p, &p, 10);
       cur->len = p - q;
     } else {
       error_at (p, "invalid token\n");
     }
   }
 
-  new_token (TK_EOF, cur, p);
+  // EOF
+  new_token (TK_EOF, cur, p, 0);
   return head.next;
 }
 

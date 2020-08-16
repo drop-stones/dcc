@@ -139,49 +139,45 @@ static Node *read_expr_stmt (void) {
 //      | expr ";"
 Node *stmt () {
   Node *node;
-  Token *tok;
+  //Token *tok;
 
-  if ((tok = consume_keyword ()) != NULL) {
-    switch (tok->kind) {
-    case TK_RETURN:
-      node = new_unary (ND_RETURN, expr ());
-      expect (";");
-      break;
-    case TK_IF:
-      node = new_node (ND_IF);
-      expect ("(");
-      node->cond = expr ();
-      expect (")");
-      node->then = stmt ();
-      if (token->kind == TK_ELSE) {
-        consume_keyword ();
-        node->els = stmt ();
-      }
-      break;
-    case TK_WHILE:
-      node = new_node (ND_WHILE);
-      expect ("(");
-      node->cond = expr ();
-      expect (")");
-      node->then = stmt ();
-      break;
-    case TK_FOR:
-      node = new_node (ND_FOR);
-      expect ("(");
-      if (!consume (";")) {
-        node->init = read_expr_stmt ();
-        expect (";");
-      }
-      if (!consume (";")) {
-        node->cond = expr ();
-        expect (";");
-      }
-      if (!consume (")")) {
-        node->inc = read_expr_stmt ();
-        expect (")");
-      }
-      node->then = stmt ();
+//  if ((tok = consume_keyword ()) != NULL) {
+//    switch (tok->kind) {
+  if (consume ("return")) {
+    node = new_unary (ND_RETURN, expr ());
+    expect (";");
+  } else if (consume ("if")) {
+    node = new_node (ND_IF);
+    expect ("(");
+    node->cond = expr ();
+    expect (")");
+    node->then = stmt ();
+    if (token->kind == TK_ELSE) {
+      consume_keyword ();
+      node->els = stmt ();
     }
+  } else if (consume ("while")) {
+    node = new_node (ND_WHILE);
+    expect ("(");
+    node->cond = expr ();
+    expect (")");
+    node->then = stmt ();
+  } else if (consume ("for")) {
+    node = new_node (ND_FOR);
+    expect ("(");
+    if (!consume (";")) {
+      node->init = read_expr_stmt ();
+      expect (";");
+    }
+    if (!consume (";")) {
+      node->cond = expr ();
+      expect (";");
+    }
+    if (!consume (")")) {
+      node->inc = read_expr_stmt ();
+      expect (")");
+    }
+    node->then = stmt ();
   } else if (consume ("{")) {
     Node head = {};
     Node *cur = &head;
