@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct Type Type;
 
 //
 // tokenize.c
@@ -56,6 +57,7 @@ extern char *TokenKindStr [];
 typedef struct Var Var;
 struct Var {
   char *name;
+  Type *ty;
   int offset;
 };
 
@@ -133,7 +135,24 @@ struct Function {
   int stack_size;
 };
 
-Function *program ();
+Function *program (void);
+
+
+/*
+ * type.c
+ */
+
+typedef enum {
+  TY_INT,
+  TY_PTR,
+} TypeKind;
+
+struct Type {
+  TypeKind kind;
+  Type *base;
+};
+
+Type *pointer_to (Type *base);
 
 /*
  *  codegen.c

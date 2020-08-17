@@ -113,5 +113,6 @@ assert 3 'int main() { int x; int y; x=3; y=5; return *(&y-8); }'
 assert 5 'int main() { int x; int y; x=3; y=&x; *y=5; return x; }'
 assert 7 'int main() { int x; int y; x=3; y=5; *(&x+8)=7; return y; }'
 assert 7 'int main() { int x; int y; x=3; y=5; *(&y-8)=7; return x; }'
+assert 8 'int main() { int x; int y; x=3; y=5; return foo(&x, y); } int foo (int *x, int y) { return *x + y; }'
 
 echo OK

@@ -49,9 +49,10 @@ static Node *new_var_node (Var *var) {
   return node;
 }
 
-static Var *new_lvar (char *name) {
+static Var *new_lvar (char *name, Type *ty) {
   Var *var = calloc (1, sizeof (Var));
   var->name = name;
+  var->ty   = ty;
 
   VarList *vl = calloc (1, sizeof (VarList));
   vl->var = var;
@@ -61,6 +62,7 @@ static Var *new_lvar (char *name) {
 }
 
 static Function *function (void);
+static Node *declaration (void);
 static Node *stmt (void);
 static Node *expr (void);
 static Node *assign (void);
@@ -86,14 +88,16 @@ Function *program (void) {
 }
 
 
-// declaration = basetype ident ("=" expr) ";"
-static Node *declaration (void) {
-  //Token *tok = token;
-  expect ("int");
-  Var *var = new_lvar (expect_ident ());
 
-  expect (";");
-  return new_node (ND_NULL);
+// basetype = "int" "*"*
+static Type *basetype (void) {
+  expect ("int");
+  Type *ty = calloc (1, sizeof (Type));
+  ty->kind = TY_INT;
+
+  while (consume ("*"))
+    ty = pointer_to (ty);
+  return ty;
 }
 
 static VarList *read_func_params (void) {
@@ -102,17 +106,16 @@ static VarList *read_func_params (void) {
 
   VarList *head = calloc (1, sizeof (VarList));
 
-  expect ("int");
-
-  head->var = new_lvar (expect_ident ());
+  Type *ty = basetype ();
+  head->var = new_lvar (expect_ident (), ty);
   VarList *cur = head;
 
   while (!consume (")")) {
     expect (",");
-    expect ("int");
 
+    ty = basetype ();
     cur->next = calloc (1, sizeof (VarList));
-    cur->next->var = new_lvar (expect_ident ());
+    cur->next->var = new_lvar (expect_ident (), ty);
     cur = cur->next;
   }
 
@@ -144,6 +147,16 @@ static Function *function (void) {
   fn->node = head.next;
   fn->locals = locals;
   return fn;
+}
+
+// declaration = basetype ident ("=" expr) ";"
+static Node *declaration (void) {
+  //Token *tok = token;
+  Type *ty = basetype ();
+  Var *var = new_lvar (expect_ident (), ty);
+
+  expect (";");
+  return new_node (ND_NULL);
 }
 
 static Node *read_expr_stmt (void) {
