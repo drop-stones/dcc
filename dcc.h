@@ -16,11 +16,6 @@ typedef enum {
   TK_RESERVED,	// operation
   TK_IDENT,	// identifier
   TK_NUM, 	// number
-  TK_RETURN,	// return
-  TK_IF,	// if
-  TK_ELSE,	// else
-  TK_WHILE,	// while
-  TK_FOR,	// for
   TK_EOF,	// End of File
 } TokenKind;
 
@@ -72,6 +67,7 @@ struct VarList {
 
 // AST node
 typedef enum {
+  ND_NULL,	// nop
   ND_ADD,	// +
   ND_SUB,	// -
   ND_MUL,	// *

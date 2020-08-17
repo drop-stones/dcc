@@ -54,17 +54,6 @@ Token *consume (char *op) {
   return tok;
 }
 
-Token *consume_keyword () {
-  if (token->kind != TK_RETURN &&
-      token->kind != TK_IF     &&
-      token->kind != TK_ELSE   &&
-      token->kind != TK_WHILE  &&
-      token->kind != TK_FOR)
-    return NULL;
-  Token *tok_kw = token;
-  token = token->next;
-  return tok_kw;
-}
 
 Token *consume_ident () {
   if (token->kind != TK_IDENT)
@@ -157,13 +146,6 @@ Token *tokenize (char *p) {
     if (isspace (*p)) {
       // skip white space
       p++;
-//    } else if (!strncmp (p, "<=", 2) ||
-//               !strncmp (p, ">=", 2) ||
-//               !strncmp (p, "==", 2) ||
-//               !strncmp (p, "!=", 2)) {
-//      cur = new_token (TK_RESERVED, cur, p);
-//      cur->len = 2;
-//      p += 2;
     } else if ((kw = starts_with_reserved (p)) != NULL) {
       // Keywords or multi-letter punctuators
       int len = strlen (kw);

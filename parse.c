@@ -85,16 +85,32 @@ Function *program (void) {
   return head.next;
 }
 
+
+// declaration = basetype ident ("=" expr) ";"
+static Node *declaration (void) {
+  //Token *tok = token;
+  expect ("int");
+  Var *var = new_lvar (expect_ident ());
+
+  expect (";");
+  return new_node (ND_NULL);
+}
+
 static VarList *read_func_params (void) {
   if (consume (")"))
     return NULL;
 
   VarList *head = calloc (1, sizeof (VarList));
+
+  expect ("int");
+
   head->var = new_lvar (expect_ident ());
   VarList *cur = head;
 
   while (!consume (")")) {
     expect (",");
+    expect ("int");
+
     cur->next = calloc (1, sizeof (VarList));
     cur->next->var = new_lvar (expect_ident ());
     cur = cur->next;
@@ -109,6 +125,9 @@ static Function *function (void) {
   locals = NULL;
 
   Function *fn = calloc (1, sizeof (Function));
+
+  expect ("int");
+
   fn->name = expect_ident ();
   expect ("(");
   fn->params = read_func_params ();
@@ -136,13 +155,12 @@ static Node *read_expr_stmt (void) {
 //      | "while" "(" expr ")" stmt
 //      | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 //      | "{" stmt* "}"
+//      | declaration
 //      | expr ";"
 Node *stmt () {
   Node *node;
   //Token *tok;
 
-//  if ((tok = consume_keyword ()) != NULL) {
-//    switch (tok->kind) {
   if (consume ("return")) {
     node = new_unary (ND_RETURN, expr ());
     expect (";");
@@ -152,8 +170,7 @@ Node *stmt () {
     node->cond = expr ();
     expect (")");
     node->then = stmt ();
-    if (token->kind == TK_ELSE) {
-      consume_keyword ();
+    if (consume ("else")) {
       node->els = stmt ();
     }
   } else if (consume ("while")) {
@@ -188,6 +205,8 @@ Node *stmt () {
     }
     node = new_node (ND_BLOCK);
     node->body = head.next;
+  } else if (peek ("int")) {
+    node = declaration ();
   } else {
     node = read_expr_stmt ();
     expect (";");
@@ -320,7 +339,8 @@ Node *primary () {
     // Variable
     Var *var = find_var (tok);
     if (!var)
-      var = new_lvar (strndup (tok->str, tok->len));
+      //var = new_lvar (strndup (tok->str, tok->len));
+      error_at (token->str, "undeclared identifier\n");
     return new_var_node (var);
   } else {
     return new_num (expect_number ());
