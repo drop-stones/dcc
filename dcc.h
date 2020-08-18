@@ -70,8 +70,11 @@ struct VarList {
 // AST node
 typedef enum {
   ND_NULL,	// nop
-  ND_ADD,	// +
-  ND_SUB,	// -
+  ND_ADD,	// num + num
+  ND_PTR_ADD,	// ptr + num or num + ptr
+  ND_SUB,	// num - num
+  ND_PTR_SUB,	// ptr - num
+  ND_PTR_DIFF,	// ptr - ptr
   ND_MUL,	// *
   ND_DIV,	// /
   ND_EQ,	// ==
@@ -102,6 +105,7 @@ typedef struct Node Node;
 struct Node {
   NodeKind kind;
   Node *next;
+  Type *ty;	// Type, e.g. int or pointer to int
 
   Node *lhs;	// left-hand side
   Node *rhs;	// right-hand side
@@ -152,7 +156,9 @@ struct Type {
   Type *base;
 };
 
+bool is_integer (Type *ty);
 Type *pointer_to (Type *base);
+void add_type (Node *node);
 
 /*
  *  codegen.c

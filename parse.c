@@ -61,9 +61,40 @@ static Var *new_lvar (char *name, Type *ty) {
   return var;
 }
 
+static Node *new_add (Node *lhs, Node *rhs) {
+  add_type (lhs);
+  add_type (rhs);
+
+  if (is_integer (lhs->ty) && is_integer (rhs->ty))
+    return new_binary (ND_ADD, lhs, rhs);
+  if (lhs->ty->base && is_integer (rhs->ty))
+    return new_binary (ND_PTR_ADD, lhs, rhs);
+  if (is_integer (lhs->ty) && rhs->ty->base)
+    return new_binary (ND_PTR_ADD, lhs, rhs);
+
+  error ("invalid operands");
+  return NULL;
+}
+
+static Node *new_sub (Node *lhs, Node *rhs) {
+  add_type (lhs);
+  add_type (rhs);
+
+  if (is_integer (lhs->ty) && is_integer (rhs->ty))
+    return new_binary (ND_SUB, lhs, rhs);
+  if (lhs->ty->base && is_integer (rhs->ty))
+    return new_binary (ND_PTR_SUB, lhs, rhs);
+  if (lhs->ty->base && rhs->ty->base)
+    return new_binary (ND_PTR_DIFF, lhs, rhs);
+
+  error ("invalid operands");
+  return NULL;
+}
+
 static Function *function (void);
 static Node *declaration (void);
 static Node *stmt (void);
+static Node *stmt2 (void);
 static Node *expr (void);
 static Node *assign (void);
 static Node *equality (void);
@@ -171,6 +202,12 @@ static Node *read_expr_stmt (void) {
 //      | declaration
 //      | expr ";"
 Node *stmt () {
+  Node *node = stmt2 ();
+  add_type (node);
+  return node;
+}
+
+Node *stmt2 () {
   Node *node;
   //Token *tok;
 
@@ -280,9 +317,11 @@ Node *add () {
 
   for (;;) {
     if (consume ("+"))
-      node = new_binary (ND_ADD, node, mul ());
+      //node = new_binary (ND_ADD, node, mul ());
+      node = new_add (node, mul ());
     else if (consume ("-"))
-      node = new_binary (ND_SUB, node, mul ());
+      //node = new_binary (ND_SUB, node, mul ());
+      node = new_sub (node, mul ());
     else
       return node;
   }
