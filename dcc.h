@@ -33,15 +33,16 @@ struct Token {
 
 void error (char *fmt, ...);
 void error_at (char *loc, char *fmt, ...);
+void error_tok (Token *tok, char *fmt, ...);
 Token *peek (char *s);
 Token *consume (char *op);
-Token *consume_keyword();
-Token *consume_ident ();
+Token *consume_ident (void);
+Token *consume_sizeof (void);
 void expect (char *op);
-int expect_number ();
-char *expect_ident ();
-bool at_eof ();
-Token *tokenize (char *p);
+int expect_number (void);
+char *expect_ident (void);
+bool at_eof (void);
+Token *tokenize (void);
 void print_tokens (Token *head);
 
 extern char *user_input;
@@ -106,6 +107,7 @@ struct Node {
   NodeKind kind;
   Node *next;
   Type *ty;	// Type, e.g. int or pointer to int
+  Token *tok;	// Representative token
 
   Node *lhs;	// left-hand side
   Node *rhs;	// right-hand side
@@ -117,9 +119,10 @@ struct Node {
   Node *init;
   Node *inc;
 
+  // Block
   Node *body;
 
-  // used if kind == FUNCALL
+  // Function call
   char *funcname;
   Node *args;
 
@@ -132,6 +135,7 @@ typedef struct Function Function;
 struct Function {
   Function *next;
   char *name;
+  Type *ty;
   VarList *params;
 
   Node *node;
@@ -149,15 +153,21 @@ Function *program (void);
 typedef enum {
   TY_INT,
   TY_PTR,
+  TY_ARRAY,
 } TypeKind;
 
 struct Type {
   TypeKind kind;
+  int size;	// sizeof () value
   Type *base;
+  int array_len;
 };
+
+extern Type *int_type;
 
 bool is_integer (Type *ty);
 Type *pointer_to (Type *base);
+Type *array_of (Type *base, int len);
 void add_type (Node *node);
 
 /*

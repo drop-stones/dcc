@@ -15,36 +15,34 @@ static Var *find_var (Token *tok) {
   return NULL;
 }
 
-static Node *new_node (NodeKind kind) {
+static Node *new_node (NodeKind kind, Token *tok) {
   Node *node = calloc (1, sizeof (Node));
   node->kind = kind;
+  node->tok  = tok;
   return node;
 }
 
-static Node *new_binary (NodeKind kind, Node *lhs, Node *rhs) {
-  Node *node = calloc (1, sizeof (Node));
-  node->kind = kind;
+static Node *new_binary (NodeKind kind, Node *lhs, Node *rhs, Token *tok) {
+  Node *node = new_node (kind, tok);
   node->lhs  = lhs;
   node->rhs  = rhs;
   return node;
 }
 
-static Node *new_unary (NodeKind kind, Node *expr) {
-  Node *node = calloc (1, sizeof (Node));
-  node->kind = kind;
+static Node *new_unary (NodeKind kind, Node *expr, Token *tok) {
+  Node *node = new_node (kind, tok);
   node->lhs  = expr;
   return node;
 }
 
-static Node *new_num (int val) {
-  Node *node = calloc (1, sizeof (Node));
-  node->kind = ND_NUM;
+static Node *new_num (int val, Token *tok) {
+  Node *node = new_node (ND_NUM, tok);
   node->val  = val;
   return node;
 }
 
-static Node *new_var_node (Var *var) {
-  Node *node = new_node (ND_VAR);
+static Node *new_var_node (Var *var, Token *tok) {
+  Node *node = new_node (ND_VAR, tok);
   node->var = var;
   return node;
 }
@@ -61,34 +59,39 @@ static Var *new_lvar (char *name, Type *ty) {
   return var;
 }
 
-static Node *new_add (Node *lhs, Node *rhs) {
+static Node *new_add (Node *lhs, Node *rhs, Token *tok) {
   add_type (lhs);
   add_type (rhs);
 
   if (is_integer (lhs->ty) && is_integer (rhs->ty))
-    return new_binary (ND_ADD, lhs, rhs);
+    return new_binary (ND_ADD, lhs, rhs, tok);
   if (lhs->ty->base && is_integer (rhs->ty))
-    return new_binary (ND_PTR_ADD, lhs, rhs);
+    return new_binary (ND_PTR_ADD, lhs, rhs, tok);
   if (is_integer (lhs->ty) && rhs->ty->base)
-    return new_binary (ND_PTR_ADD, lhs, rhs);
+    return new_binary (ND_PTR_ADD, lhs, rhs, tok);
 
   error ("invalid operands");
   return NULL;
 }
 
-static Node *new_sub (Node *lhs, Node *rhs) {
+static Node *new_sub (Node *lhs, Node *rhs, Token *tok) {
   add_type (lhs);
   add_type (rhs);
 
   if (is_integer (lhs->ty) && is_integer (rhs->ty))
-    return new_binary (ND_SUB, lhs, rhs);
+    return new_binary (ND_SUB, lhs, rhs, tok);
   if (lhs->ty->base && is_integer (rhs->ty))
-    return new_binary (ND_PTR_SUB, lhs, rhs);
+    return new_binary (ND_PTR_SUB, lhs, rhs, tok);
   if (lhs->ty->base && rhs->ty->base)
-    return new_binary (ND_PTR_DIFF, lhs, rhs);
+    return new_binary (ND_PTR_DIFF, lhs, rhs, tok);
 
   error ("invalid operands");
   return NULL;
+}
+
+static Node *new_sizeof (Node *node, Token *tok) {
+  add_type (node);
+  return new_num (node->ty->size, tok);
 }
 
 static Function *function (void);
@@ -102,6 +105,7 @@ static Node *relational (void);
 static Node *add (void);
 static Node *mul (void);
 static Node *unary (void);
+static Node *suffix (void);
 static Node *primary (void);
 
 
@@ -123,45 +127,55 @@ Function *program (void) {
 // basetype = "int" "*"*
 static Type *basetype (void) {
   expect ("int");
-  Type *ty = calloc (1, sizeof (Type));
-  ty->kind = TY_INT;
+  Type *ty = int_type;
 
   while (consume ("*"))
     ty = pointer_to (ty);
   return ty;
 }
 
+static Type *read_type_suffix (Type *base) {
+  if (!consume ("["))
+    return base;
+  int size = expect_number ();
+  expect ("]");
+  return array_of (base, size);
+}
+
+static VarList *read_func_param (void) {
+  Type *ty = basetype ();
+  char *name = expect_ident ();
+  ty = read_type_suffix (ty);
+
+  VarList *vl = calloc (1, sizeof (VarList));
+  vl->var = new_lvar (name, ty);
+  return vl;
+}
+
 static VarList *read_func_params (void) {
   if (consume (")"))
     return NULL;
 
-  VarList *head = calloc (1, sizeof (VarList));
-
-  Type *ty = basetype ();
-  head->var = new_lvar (expect_ident (), ty);
+  VarList *head = read_func_param ();
   VarList *cur = head;
 
   while (!consume (")")) {
     expect (",");
-
-    ty = basetype ();
-    cur->next = calloc (1, sizeof (VarList));
-    cur->next->var = new_lvar (expect_ident (), ty);
+    cur->next = read_func_param ();
     cur = cur->next;
   }
 
   return head;
 }
 
-// function = ident "(" params? ")" "{" stmt* "}"
-// params   = ident ("," ident)*
+// function = basetype ident "(" params? ")" "{" stmt* "}"
+// params   = param ( "," param )*
+// param    = basetype ident
 static Function *function (void) {
   locals = NULL;
 
   Function *fn = calloc (1, sizeof (Function));
-
-  expect ("int");
-
+  fn->ty   = basetype ();
   fn->name = expect_ident ();
   expect ("(");
   fn->params = read_func_params ();
@@ -180,18 +194,28 @@ static Function *function (void) {
   return fn;
 }
 
-// declaration = basetype ident ("=" expr) ";"
+// declaration = basetype ident ("[" num "]")* ("=" expr) ";"
 static Node *declaration (void) {
-  //Token *tok = token;
-  Type *ty = basetype ();
-  Var *var = new_lvar (expect_ident (), ty);
+  Token *tok = token;
+  Type *ty   = basetype ();
+  char *name = expect_ident ();
+  ty = read_type_suffix (ty);
+  Var *var = new_lvar (name, ty);
 
+  if (consume (";"))
+    return new_node (ND_NULL, tok);
+
+  expect ("=");
+  Node *lhs = new_var_node (var, tok);
+  Node *rhs = expr ();
   expect (";");
-  return new_node (ND_NULL);
+  Node *node = new_binary (ND_ASSIGN, lhs, rhs, tok);
+  return new_unary (ND_EXPR_STMT, node, tok);
 }
 
 static Node *read_expr_stmt (void) {
-  return new_unary (ND_EXPR_STMT, expr ());
+  Token *tok = token;
+  return new_unary (ND_EXPR_STMT, expr (), tok);
 }
 
 // stmt = "return" expr ";"
@@ -201,21 +225,21 @@ static Node *read_expr_stmt (void) {
 //      | "{" stmt* "}"
 //      | declaration
 //      | expr ";"
-Node *stmt () {
+static Node *stmt (void) {
   Node *node = stmt2 ();
   add_type (node);
   return node;
 }
 
-Node *stmt2 () {
+static Node *stmt2 (void) {
   Node *node;
-  //Token *tok;
+  Token *tok;
 
-  if (consume ("return")) {
-    node = new_unary (ND_RETURN, expr ());
+  if (tok = consume ("return")) {
+    node = new_unary (ND_RETURN, expr (), tok);
     expect (";");
-  } else if (consume ("if")) {
-    node = new_node (ND_IF);
+  } else if (tok = consume ("if")) {
+    node = new_node (ND_IF, tok);
     expect ("(");
     node->cond = expr ();
     expect (")");
@@ -223,14 +247,14 @@ Node *stmt2 () {
     if (consume ("else")) {
       node->els = stmt ();
     }
-  } else if (consume ("while")) {
-    node = new_node (ND_WHILE);
+  } else if (tok = consume ("while")) {
+    node = new_node (ND_WHILE, tok);
     expect ("(");
     node->cond = expr ();
     expect (")");
     node->then = stmt ();
-  } else if (consume ("for")) {
-    node = new_node (ND_FOR);
+  } else if (tok = consume ("for")) {
+    node = new_node (ND_FOR, tok);
     expect ("(");
     if (!consume (";")) {
       node->init = read_expr_stmt ();
@@ -245,7 +269,7 @@ Node *stmt2 () {
       expect (")");
     }
     node->then = stmt ();
-  } else if (consume ("{")) {
+  } else if (tok = consume ("{")) {
     Node head = {};
     Node *cur = &head;
 
@@ -253,9 +277,9 @@ Node *stmt2 () {
       cur->next = stmt ();
       cur = cur->next;
     }
-    node = new_node (ND_BLOCK);
+    node = new_node (ND_BLOCK, tok);
     node->body = head.next;
-  } else if (peek ("int")) {
+  } else if (tok = peek ("int")) {
     node = declaration ();
   } else {
     node = read_expr_stmt ();
@@ -266,92 +290,115 @@ Node *stmt2 () {
 }
 
 // expr = assign
-Node *expr () {
+static Node *expr (void) {
   return assign ();
 }
 
 // assign = equality ("=" assign)?
-Node *assign () {
+static Node *assign (void) {
   Node *node = equality ();
-
-  if (consume ("="))
-    node = new_binary (ND_ASSIGN, node, assign ());
+  Token *tok;
+  if (tok = consume ("="))
+    node = new_binary (ND_ASSIGN, node, assign (), tok);
   return node;
 }
 
 // equality = relational ("==" relational | "!=" relational)*
-Node *equality () {
+static Node *equality (void) {
   Node *node = relational ();
+  Token *tok;
 
   for (;;) {
-    if (consume ("=="))
-      node = new_binary (ND_EQ, node, relational ());
-    else if (consume ("!="))
-      node = new_binary (ND_NE, node, relational ());
+    if (tok = consume ("=="))
+      node = new_binary (ND_EQ, node, relational (), tok);
+    else if (tok = consume ("!="))
+      node = new_binary (ND_NE, node, relational (), tok);
     else
       return node;
   }
 }
 
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
-Node *relational () {
+static Node *relational (void) {
   Node *node = add ();
+  Token *tok;
 
   for (;;) {
-    if (consume ("<"))
-      node = new_binary (ND_LT, node, add ());
-    else if (consume ("<="))
-      node = new_binary (ND_LE, node, add ());
-    else if (consume (">"))
-      node = new_binary (ND_LT, add (), node);
-    else if (consume (">="))
-      node = new_binary (ND_LE, add (), node);
+    if (tok = consume ("<"))
+      node = new_binary (ND_LT, node, add (), tok);
+    else if (tok = consume ("<="))
+      node = new_binary (ND_LE, node, add (), tok);
+    else if (tok = consume (">"))
+      node = new_binary (ND_LT, add (), node, tok);
+    else if (tok = consume (">="))
+      node = new_binary (ND_LE, add (), node, tok);
     else
       return node;
   }
 }
 
 // add = mul ("+" mul | "-" mul)*
-Node *add () {
+static Node *add (void) {
   Node *node = mul ();
+  Token *tok;
 
   for (;;) {
-    if (consume ("+"))
-      //node = new_binary (ND_ADD, node, mul ());
-      node = new_add (node, mul ());
-    else if (consume ("-"))
-      //node = new_binary (ND_SUB, node, mul ());
-      node = new_sub (node, mul ());
+    if (tok = consume ("+"))
+      node = new_add (node, mul (), tok);
+    else if (tok = consume ("-"))
+      node = new_sub (node, mul (), tok);
     else
       return node;
   }
 }
 
 // mul = unary ("*" unary | "/" unary)*
-Node *mul () {
+static Node *mul (void) {
   Node *node = unary ();
+  Token *tok;
 
   for (;;) {
-    if (consume ("*"))
-      node = new_binary (ND_MUL, node, unary ());
-    else if (consume ("/"))
-      node = new_binary (ND_DIV, node, unary ());
+    if (tok = consume ("*"))
+      node = new_binary (ND_MUL, node, unary (), tok);
+    else if (tok = consume ("/"))
+      node = new_binary (ND_DIV, node, unary (), tok);
     else
       return node;
   }
 }
 
-// unary = ("+" | "-" | "*" | "&")? unary
-Node *unary () {
+// unary = "sizeof" unary
+//       | ("+" | "-" | "*" | "&")? unary
+//       | suffix
+static Node *unary (void) {
+  Token *tok;
+
+  if (tok = consume ("sizeof"))
+    return new_sizeof (unary (), tok);
   if (consume ("+"))
-    return primary ();
-  if (consume ("-"))
-    return new_binary (ND_SUB, new_num (0), primary ());
-  if (consume ("*"))
-    return new_unary (ND_DEREF, unary ());
-  if (consume ("&"))
-    return new_unary (ND_ADDR, unary ());
-  return primary ();
+    return unary ();
+  if (tok = consume ("-"))
+    return new_binary (ND_SUB, new_num (0, tok), unary (), tok);
+  if (tok = consume ("*"))
+    return new_unary (ND_DEREF, unary (), tok);
+  if (tok = consume ("&"))
+    return new_unary (ND_ADDR, unary (), tok);
+  return suffix ();
+}
+
+// suffix = primary ( "[" expr "]" )*
+static Node *suffix (void) {
+  Node *node = primary ();
+  Token *tok;
+
+  while (tok = consume ("[")) {
+    // x[y] is short for *(x+y)
+    Node *exp = new_add (node, expr (), tok);
+    expect ("]");
+    node = new_unary (ND_DEREF, exp, tok);
+  }
+
+  return node;
 }
 
 // func-args = "(" (assign ("," assign)*)? ")"
@@ -370,8 +417,8 @@ static Node *func_args (void) {
   return head;
 }
 
-// primary = "(" expr ")" | ident func-args? | num
-Node *primary () {
+// primary = "(" expr ")" | ident ("[" num  "]")* func-args? | num
+static Node *primary (void) {
   Node *node;
   Token *tok;
 
@@ -379,10 +426,10 @@ Node *primary () {
     node = expr ();
     expect (")");
     return node;
-  } else if ((tok = consume_ident ()) != NULL) {
+  } else if (tok = consume_ident ()) {
     // Function call
     if (consume ("(")) {
-      node = new_node (ND_FUNCALL);
+      node = new_node (ND_FUNCALL, tok);
       node->funcname = strndup (tok->str, tok->len);
       node->args = func_args ();
       return node;
@@ -391,11 +438,14 @@ Node *primary () {
     // Variable
     Var *var = find_var (tok);
     if (!var)
-      //var = new_lvar (strndup (tok->str, tok->len));
-      error_at (token->str, "undeclared identifier\n");
-    return new_var_node (var);
+      error_tok (tok, "undeclared variable\n");
+    return new_var_node (var, tok);
   } else {
-    return new_num (expect_number ());
+    tok = token;
+    if (tok->kind != TK_NUM)
+      error_tok (tok, "expected expression");
+
+    return new_num (expect_number (), tok);
   }
 }
 
