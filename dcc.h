@@ -50,16 +50,19 @@ extern Token *token;
 extern char *TokenKindStr [];
 
 
-/*
- *  parse.c
- */
+//
+//  parse.c
+//
 
-// Local variable
+// Variable
 typedef struct Var Var;
 struct Var {
   char *name;
   Type *ty;
-  int offset;
+  bool is_local;
+
+  // Local variable
+  int offset;	// Offset from rbp
 };
 
 typedef struct VarList VarList;
@@ -143,12 +146,18 @@ struct Function {
   int stack_size;
 };
 
-Function *program (void);
 
+typedef struct Program Program;
+struct Program {
+  VarList  *globals;
+  Function *fns;
+};
 
-/*
- * type.c
- */
+Program *program (void);
+
+//
+// type.c
+//
 
 typedef enum {
   TY_INT,
@@ -174,4 +183,4 @@ void add_type (Node *node);
  *  codegen.c
  */
 
-void codegen (Function *prog);
+void codegen (Program *prog);

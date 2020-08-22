@@ -73,14 +73,6 @@ Token *consume_ident (void) {
   return tok_ident;
 }
 
-//Token *consume_sizeof (void) {
-//  if (token->kind != TK_SIZEOF)
-//    return NULL;
-//  Token *tok_sizeof = token;
-//  token = token->next;
-//  return tok_sizeof;
-//}
-
 // move to next Token from Token sequence
 void expect (char *s) {
   if (!peek (s))

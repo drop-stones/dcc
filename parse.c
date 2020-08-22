@@ -4,10 +4,17 @@
 // All local variable instances created during parsing are
 // accumulated to this list.
 static VarList *locals;
+static VarList *globals;
 
 // find a local variable by name.
 static Var *find_var (Token *tok) {
   for (VarList *vl = locals; vl; vl = vl->next) {
+    Var *var = vl->var;
+    if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
+      return var;
+  }
+
+  for (VarList *vl = globals; vl; vl = vl->next) {
     Var *var = vl->var;
     if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
       return var;
@@ -47,15 +54,31 @@ static Node *new_var_node (Var *var, Token *tok) {
   return node;
 }
 
-static Var *new_lvar (char *name, Type *ty) {
-  Var *var = calloc (1, sizeof (Var));
+static Var *new_var (char *name, Type *ty, bool is_local) {
+  Var *var  = calloc (1, sizeof (Var));
   var->name = name;
   var->ty   = ty;
+  var->is_local = is_local;
+  return var;
+}
+
+static Var *new_lvar (char *name, Type *ty) {
+  Var *var = new_var (name, ty, true);
 
   VarList *vl = calloc (1, sizeof (VarList));
   vl->var = var;
   vl->next = locals;
   locals = vl;
+  return var;
+}
+
+static Var *new_gvar (char *name, Type *ty) {
+  Var *var = new_var (name, ty, false);
+
+  VarList *vl = calloc (1, sizeof (VarList));
+  vl->var = var;
+  vl->next = globals;
+  globals = vl;
   return var;
 }
 
@@ -95,6 +118,8 @@ static Node *new_sizeof (Node *node, Token *tok) {
 }
 
 static Function *function (void);
+static Type *basetype (void);
+static void global_var (void);
 static Node *declaration (void);
 static Node *stmt (void);
 static Node *stmt2 (void);
@@ -109,17 +134,32 @@ static Node *suffix (void);
 static Node *primary (void);
 
 
-// program = function*
-Function *program (void) {
+bool is_function (void) {
+  Token *tok = token;	// Save current token
+  basetype ();
+  bool is_func = consume_ident () && consume ("(");
+  token = tok;		// Restore token
+  return is_func;
+}
+
+// program = ( function | global_var )*
+Program *program (void) {
+  Program *prog = calloc (1, sizeof (Program));
   Function head = {};
   Function *cur = &head;
 
   while (!at_eof ()) {
-    cur->next = function ();
-    cur = cur->next;
+    if (is_function ()) {
+      cur->next = function ();
+      cur = cur->next;
+    } else {
+      global_var ();
+    }
   }
 
-  return head.next;
+  prog->globals = globals;
+  prog->fns = head.next;
+  return prog;
 }
 
 
@@ -134,14 +174,18 @@ static Type *basetype (void) {
   return ty;
 }
 
+// type_suffix = ( "[" num "]" )*
 static Type *read_type_suffix (Type *base) {
-  if (!consume ("["))
-    return base;
-  int size = expect_number ();
-  expect ("]");
-  return array_of (base, size);
+  Type *ty = base;
+  while (consume ("[")) {
+    int size = expect_number ();
+    ty = array_of (ty, size);
+    expect ("]");
+  }
+  return ty;
 }
 
+// param = basetype ident type_suffix
 static VarList *read_func_param (void) {
   Type *ty = basetype ();
   char *name = expect_ident ();
@@ -152,6 +196,7 @@ static VarList *read_func_param (void) {
   return vl;
 }
 
+// params = param ( "," param )*
 static VarList *read_func_params (void) {
   if (consume (")"))
     return NULL;
@@ -170,7 +215,7 @@ static VarList *read_func_params (void) {
 
 // function = basetype ident "(" params? ")" "{" stmt* "}"
 // params   = param ( "," param )*
-// param    = basetype ident
+// param    = basetype ident type_suffix
 static Function *function (void) {
   locals = NULL;
 
@@ -192,6 +237,15 @@ static Function *function (void) {
   fn->node = head.next;
   fn->locals = locals;
   return fn;
+}
+
+static void global_var (void) {
+  Token *tok  = token;
+  Type  *ty   = basetype ();
+  char  *name = expect_ident ();
+  ty = read_type_suffix (ty);
+  expect (";");
+  new_gvar (name, ty);
 }
 
 // declaration = basetype ident ("[" num "]")* ("=" expr) ";"
@@ -417,7 +471,7 @@ static Node *func_args (void) {
   return head;
 }
 
-// primary = "(" expr ")" | ident ("[" num  "]")* func-args? | num
+// primary = "(" expr ")" | ident func-args? | num
 static Node *primary (void) {
   Node *node;
   Token *tok;
