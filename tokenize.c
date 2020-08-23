@@ -76,7 +76,7 @@ Token *consume_ident (void) {
 // move to next Token from Token sequence
 void expect (char *s) {
   if (!peek (s))
-    error_tok (token, "expected i\"%s\"", s);
+    error_tok (token, "expected \"%s\"", s);
   token = token->next;
 }
 
@@ -127,7 +127,9 @@ static bool is_alnum (char c) {
 
 static char *starts_with_reserved (char *p) {
   // Keyword
-  static char *kw [] = { "return", "if", "else", "while", "for", "int", "sizeof" };
+  static char *kw [] = { "return", "if", "else", "while", "for", "sizeof",
+                         "int", "char"
+                       };
 
   for (int i = 0; i < sizeof (kw) / sizeof (*kw); i++) {
     int len = strlen (kw [i]);
@@ -161,9 +163,6 @@ Token *tokenize (void) {
       int len = strlen (kw);
       cur = new_token (TK_RESERVED, cur, p, len);
       p += len;
-    //} else if (!strncmp (p, "sizeof", 6)) {
-    //  cur = new_token (TK_SIZEOF, cur, p, 6);
-    //  p += 6;
     } else if (ispunct (*p)) {
       // Single-letter punctuators
       cur = new_token (TK_RESERVED, cur, p++, 1);

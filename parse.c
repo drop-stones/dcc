@@ -93,7 +93,7 @@ static Node *new_add (Node *lhs, Node *rhs, Token *tok) {
   if (is_integer (lhs->ty) && rhs->ty->base)
     return new_binary (ND_PTR_ADD, lhs, rhs, tok);
 
-  error ("invalid operands");
+  error_tok (tok, "invalid operands");
   return NULL;
 }
 
@@ -164,10 +164,17 @@ Program *program (void) {
 
 
 
-// basetype = "int" "*"*
+// basetype = ( "char" | "int" ) "*"*
 static Type *basetype (void) {
-  expect ("int");
-  Type *ty = int_type;
+  Token *tok;
+  Type *ty;
+
+  if (tok = consume ("char"))
+    ty = char_type;
+  else if (tok = consume ("int"))
+    ty = int_type;
+  else
+    error_tok (tok, "type error");
 
   while (consume ("*"))
     ty = pointer_to (ty);
@@ -272,6 +279,18 @@ static Node *read_expr_stmt (void) {
   return new_unary (ND_EXPR_STMT, expr (), tok);
 }
 
+// Returns true if the next token represents a type.
+static bool is_typename (void) {
+  static char *ty[] = {"int", "char"};
+  Token *tok;
+
+  for (int i = 0; i < sizeof (ty) / sizeof (*ty); i++) {
+    if (tok = peek (ty [i]))
+      return true;
+  }
+  return false;
+}
+
 // stmt = "return" expr ";"
 //      | "if" "(" expr ")" stmt ("else" stmt)?
 //      | "while" "(" expr ")" stmt
@@ -333,7 +352,7 @@ static Node *stmt2 (void) {
     }
     node = new_node (ND_BLOCK, tok);
     node->body = head.next;
-  } else if (tok = peek ("int")) {
+  } else if (is_typename ()) {
     node = declaration ();
   } else {
     node = read_expr_stmt ();
