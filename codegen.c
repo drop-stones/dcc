@@ -252,7 +252,10 @@ static void emit_data (Program *prog) {
   for (VarList *vl = prog->globals; vl; vl = vl->next) {
     Var *var = vl->var;
     printf ("%s:\n", var->name);
-    printf ("  .zero %d\n", var->ty->size);
+    if (var->contents)
+      printf ("  .string \"%s\"\n", var->contents);
+    else
+      printf ("  .zero %d\n", var->ty->size);
   }
 }
 

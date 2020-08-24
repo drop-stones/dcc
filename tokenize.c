@@ -1,7 +1,7 @@
 #include "dcc.h"
 
 char *TokenKindStr [] = {
-  "RESERVED", "IDENT", "NUM", "EOF",
+  "RESERVED", "IDENT", "STR", "NUM", "EOF",
 };
 
 Token *token;
@@ -53,7 +53,7 @@ Token *peek (char *s) {
   return token;
 }
 
-// Consume one Token from Token sequence
+// Consume a Token from Token sequence
 Token *consume (char *op) {
   if (token->kind != TK_RESERVED ||
       strlen (op) != token->len  ||
@@ -64,7 +64,7 @@ Token *consume (char *op) {
   return tok;
 }
 
-
+// Consume an identifier from Token sequence
 Token *consume_ident (void) {
   if (token->kind != TK_IDENT)
     return NULL;
@@ -163,6 +163,18 @@ Token *tokenize (void) {
       int len = strlen (kw);
       cur = new_token (TK_RESERVED, cur, p, len);
       p += len;
+    } else if (*p == '"') {
+      // String literals
+      char *q = p++;
+      while (*p != '\0' && *p != '"')
+        p++;
+      if (*p == '\0')
+        error_at (q, "unclosed string literal");
+      p++;
+
+      cur = new_token (TK_STR, cur, q, p - q);
+      cur->contents = strndup (q + 1, p - q - 2);	// omit ""
+      cur->cont_len = p - q - 1;			// include '\0'
     } else if (ispunct (*p)) {
       // Single-letter punctuators
       cur = new_token (TK_RESERVED, cur, p++, 1);

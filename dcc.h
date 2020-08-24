@@ -15,9 +15,10 @@ typedef struct Type Type;
 
 // Token
 typedef enum {
-  TK_RESERVED,	// operation
-  TK_IDENT,	// identifier
-  TK_NUM, 	// number
+  TK_RESERVED,	// Keywords or punctuators
+  TK_IDENT,	// Identifiers
+  TK_STR,	// String literals
+  TK_NUM, 	// Number literals
   TK_EOF,	// End of File
 } TokenKind;
 
@@ -25,11 +26,14 @@ typedef enum {
 // Token type
 typedef struct Token Token;
 struct Token {
-  TokenKind kind;
-  Token *next;
-  int val;
-  char *str;
-  int len;
+  TokenKind kind; // Token kind
+  Token *next;	  // Next token
+  int val;	  // If kind is TK_NUM, its value
+  char *str;	  // Token string
+  int len;	  // Token length
+
+  char *contents; // String literal contents including terminating '\0'
+  int cont_len;	  // String literal length
 };
 
 void error (char *fmt, ...);
@@ -64,6 +68,10 @@ struct Var {
 
   // Local variable
   int offset;	// Offset from rbp
+
+  // Global variable (string literals)
+  char *contents;
+  int cont_len;
 };
 
 typedef struct VarList VarList;

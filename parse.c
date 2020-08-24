@@ -82,6 +82,13 @@ static Var *new_gvar (char *name, Type *ty) {
   return var;
 }
 
+static char *new_label (void) {
+  static unsigned int cnt = 0;
+  char label [20];
+  sprintf (label, ".L.data.%d", cnt++);
+  return strndup (label, 20);
+}
+
 static Node *new_add (Node *lhs, Node *rhs, Token *tok) {
   add_type (lhs);
   add_type (rhs);
@@ -490,7 +497,7 @@ static Node *func_args (void) {
   return head;
 }
 
-// primary = "(" expr ")" | ident func-args? | num
+// primary = "(" expr ")" | ident func-args? | str | num
 static Node *primary (void) {
   Node *node;
   Token *tok;
@@ -512,6 +519,15 @@ static Node *primary (void) {
     Var *var = find_var (tok);
     if (!var)
       error_tok (tok, "undeclared variable\n");
+    return new_var_node (var, tok);
+  } else if (token->kind == TK_STR) {
+    tok = token;
+    token = token->next;
+
+    Type *ty = array_of (char_type, tok->cont_len);
+    Var *var = new_gvar (new_label (), ty);
+    var->contents = tok->contents;
+    var->cont_len = tok->cont_len;
     return new_var_node (var, tok);
   } else {
     tok = token;
