@@ -9,18 +9,6 @@ static VarList *scope;
 
 // find a variable by name.
 static Var *find_var (Token *tok) {
-  //for (VarList *vl = locals; vl; vl = vl->next) {
-  //  Var *var = vl->var;
-  //  if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
-  //    return var;
-  //}
-
-  //for (VarList *vl = globals; vl; vl = vl->next) {
-  //  Var *var = vl->var;
-  //  if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
-  //    return var;
-  //}
-
   for (VarList *vl = scope; vl; vl = vl->next) { 
     Var *var = vl->var;
     if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
@@ -112,7 +100,6 @@ static Node *new_add (Node *lhs, Node *rhs, Token *tok) {
     return new_binary (ND_PTR_ADD, lhs, rhs, tok);
   if (is_integer (lhs->ty) && rhs->ty->base)
     return new_binary (ND_PTR_ADD, rhs, lhs, tok);	// lhs: PTR, rhs: integer
-    //return new_binary (ND_PTR_ADD, lhs, rhs, tok);
 
   error_tok (tok, "invalid operands");
   return NULL;
@@ -274,8 +261,39 @@ static void global_var (void) {
   Type  *ty   = basetype ();
   char  *name = expect_ident ();
   ty = read_type_suffix (ty);
+  Var *gvar = new_gvar (name, ty);
+
+  if (consume (";"))
+    return;
+
+  // initialize
+  expect ("=");
+  switch (ty->kind) {
+  case TY_CHAR:
+  case TY_INT:
+    if (consume ("'"))
+      gvar->val = 0;
+    else
+      gvar->val = expect_number ();
+    break;
+  case TY_PTR:
+    gvar->int_ptr = (int *) expect_number ();
+    break;
+  case TY_ARRAY:
+    expect ("{");
+    gvar->int_arr = calloc (gvar->ty->array_len, sizeof (int));
+    for (int i = 0; i < gvar->ty->size; i++) {
+      if (consume ("}"))
+        break;
+      consume (",");
+      gvar->int_arr [i] = expect_number ();
+    }
+    break;
+  default:
+    error_tok (tok, "invalid global variable initialization");
+  }
   expect (";");
-  new_gvar (name, ty);
+  return;
 }
 
 // declaration = basetype ident ("[" num "]")* ("=" expr) ";"
@@ -289,6 +307,7 @@ static Node *declaration (void) {
   if (consume (";"))
     return new_node (ND_NULL, tok);
 
+  // initialize
   expect ("=");
   Node *lhs = new_var_node (var, tok);
   Node *rhs = expr ();

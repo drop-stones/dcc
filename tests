@@ -7,6 +7,8 @@
 
 int g1;
 int g2[4];
+int g3 = 3;
+int g4[4] = {0, 1, 2, 3};
 
 int assert (int expected, int actual, char *code) {
   if (expected == actual) {
@@ -202,6 +204,12 @@ int main () {
   assert (2, ({ int x=2; { int x=3; } x; }), "int x=2; { int x=3; } x;");
   assert (2, ({ int x=2; { int x=3; } int y=4; x; }), "int x=2; { int x=3; } int y=4; x;");
   assert (3, ({ int x=2; { x=3; } x; }), "int x=2; { x=3; }, x;");
+
+  assert (3, g3, "g3;");
+  assert (0, g4[0], "g4[0];");
+  assert (1, g4[1], "g4[1];");
+  assert (2, g4[2], "g4[2];");
+  assert (3, g4[3], "g4[3];");
 
 
   puts ("ok!");

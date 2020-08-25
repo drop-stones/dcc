@@ -71,7 +71,20 @@ struct Var {
   // Local variable
   int offset;	// Offset from rbp
 
-  // Global variable (string literals)
+  // Global variable
+
+  // Integer
+  int val;
+
+  // Pointer
+  //void *ptr;
+  int *int_ptr;
+
+  // Array
+  //void *arr;
+  int *int_arr;
+
+  // String literal
   char *contents;
   int cont_len;
 };

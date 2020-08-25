@@ -256,6 +256,12 @@ static void emit_data (Program *prog) {
     if (var->contents)
       for (int i = 0; i < var->cont_len; i++)
         printf ("  .byte 0x%x\n", var->contents [i]);
+    else if (var->val)
+      printf ("  .long %d\n", var->val);
+    else if (var->int_arr)
+      for (int i = 0; i < var->ty->size; i++)
+        //printf ("  .long %d\n", var->int_arr [i]);
+        printf ("  .quad %d\n", var->int_arr [i]);
     else
       printf ("  .zero %d\n", var->ty->size);
   }
