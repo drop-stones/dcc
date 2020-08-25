@@ -136,6 +136,7 @@ static void gen (Node *node) {
     return;
   }
   case ND_BLOCK:
+  case ND_STMT_EXPR:
     for (Node *n = node->body; n; n = n->next)
       gen (n);
     return;
@@ -253,7 +254,8 @@ static void emit_data (Program *prog) {
     Var *var = vl->var;
     printf ("%s:\n", var->name);
     if (var->contents)
-      printf ("  .string \"%s\"\n", var->contents);
+      for (int i = 0; i < var->cont_len; i++)
+        printf ("  .byte 0x%x\n", var->contents [i]);
     else
       printf ("  .zero %d\n", var->ty->size);
   }

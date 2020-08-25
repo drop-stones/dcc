@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <errno.h>
 #include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -50,6 +51,7 @@ bool at_eof (void);
 Token *tokenize (void);
 void print_tokens (Token *head);
 
+extern char *filename;
 extern char *user_input;
 extern Token *token;
 extern char *TokenKindStr [];
@@ -110,6 +112,7 @@ typedef enum {
   ND_CASE,	// case
   ND_BLOCK,	// {}
   ND_EXPR_STMT,	// expression statement
+  ND_STMT_EXPR,	// statement expression
 } NodeKind;
 
 
@@ -131,7 +134,7 @@ struct Node {
   Node *init;
   Node *inc;
 
-  // Block
+  // Block or Statement-expression
   Node *body;
 
   // Function call

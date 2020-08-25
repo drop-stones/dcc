@@ -8,7 +8,9 @@ dcc: $(OBJS)
 $(OBJS): dcc.h
 
 test: dcc
-	./test.sh
+	./dcc tests > tmp.s
+	gcc -static -o tmp tmp.s
+	./tmp
 
 clean:
 	rm -f dcc *.o *~ tmp*

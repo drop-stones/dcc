@@ -5,20 +5,28 @@
 // accumulated to this list.
 static VarList *locals;
 static VarList *globals;
+static VarList *scope;
 
-// find a local variable by name.
+// find a variable by name.
 static Var *find_var (Token *tok) {
-  for (VarList *vl = locals; vl; vl = vl->next) {
+  //for (VarList *vl = locals; vl; vl = vl->next) {
+  //  Var *var = vl->var;
+  //  if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
+  //    return var;
+  //}
+
+  //for (VarList *vl = globals; vl; vl = vl->next) {
+  //  Var *var = vl->var;
+  //  if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
+  //    return var;
+  //}
+
+  for (VarList *vl = scope; vl; vl = vl->next) { 
     Var *var = vl->var;
     if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
       return var;
   }
 
-  for (VarList *vl = globals; vl; vl = vl->next) {
-    Var *var = vl->var;
-    if (strlen (var->name) == tok->len && !strncmp (tok->str, var->name, tok->len))
-      return var;
-  }
   return NULL;
 }
 
@@ -59,6 +67,11 @@ static Var *new_var (char *name, Type *ty, bool is_local) {
   var->name = name;
   var->ty   = ty;
   var->is_local = is_local;
+
+  VarList *sc = calloc (1, sizeof (VarList));
+  sc->var  = var;
+  sc->next = scope;
+  scope    = sc;
   return var;
 }
 
@@ -98,7 +111,8 @@ static Node *new_add (Node *lhs, Node *rhs, Token *tok) {
   if (lhs->ty->base && is_integer (rhs->ty))
     return new_binary (ND_PTR_ADD, lhs, rhs, tok);
   if (is_integer (lhs->ty) && rhs->ty->base)
-    return new_binary (ND_PTR_ADD, lhs, rhs, tok);
+    return new_binary (ND_PTR_ADD, rhs, lhs, tok);	// lhs: PTR, rhs: integer
+    //return new_binary (ND_PTR_ADD, lhs, rhs, tok);
 
   error_tok (tok, "invalid operands");
   return NULL;
@@ -181,7 +195,7 @@ static Type *basetype (void) {
   else if (tok = consume ("int"))
     ty = int_type;
   else
-    error_tok (tok, "type error");
+    error_tok (token, "type error");
 
   while (consume ("*"))
     ty = pointer_to (ty);
@@ -190,13 +204,12 @@ static Type *basetype (void) {
 
 // type_suffix = ( "[" num "]" )*
 static Type *read_type_suffix (Type *base) {
-  Type *ty = base;
-  while (consume ("[")) {
-    int size = expect_number ();
-    ty = array_of (ty, size);
-    expect ("]");
-  }
-  return ty;
+  if (!consume ("["))
+    return base;
+  int size = expect_number ();
+  expect ("]");
+  base = read_type_suffix (base);
+  return array_of (base, size);
 }
 
 // param = basetype ident type_suffix
@@ -237,6 +250,8 @@ static Function *function (void) {
   fn->ty   = basetype ();
   fn->name = expect_ident ();
   expect ("(");
+
+  VarList *sc = scope;
   fn->params = read_func_params ();
   expect ("{");
 
@@ -247,6 +262,7 @@ static Function *function (void) {
     cur->next = stmt ();
     cur = cur->next;
   }
+  scope = sc;	// restore
 
   fn->node = head.next;
   fn->locals = locals;
@@ -353,10 +369,12 @@ static Node *stmt2 (void) {
     Node head = {};
     Node *cur = &head;
 
+    VarList *sc = scope;
     while (!consume ("}")) {
       cur->next = stmt ();
       cur = cur->next;
     }
+    scope = sc;
     node = new_node (ND_BLOCK, tok);
     node->body = head.next;
   } else if (is_typename ()) {
@@ -481,6 +499,32 @@ static Node *suffix (void) {
   return node;
 }
 
+// stmt-expr = "(" "{" stmt stmt* "}" ")"
+//
+// Statement expression is a GNU C extension.
+static Node *stmt_expr (Token *tok) {
+  VarList *sc = scope;
+
+  Node *node = new_node (ND_STMT_EXPR, tok);
+  node->body = stmt ();
+  Node *cur  = node->body;
+
+  while (!consume ("}")) {
+    cur->next = stmt ();
+    cur = cur->next;
+  }
+  expect (")");
+
+  scope = sc;
+
+  if (cur->kind != ND_EXPR_STMT) {
+    exit (1);
+    error_tok (cur->tok, "stmt expr returning void is not supported");
+  }
+  memcpy (cur, cur->lhs, sizeof (Node));
+  return node;
+}
+
 // func-args = "(" (assign ("," assign)*)? ")"
 static Node *func_args (void) {
   if (consume (")"))
@@ -497,12 +541,19 @@ static Node *func_args (void) {
   return head;
 }
 
-// primary = "(" expr ")" | ident func-args? | str | num
+// primary = "(" "{" stmt-expr-tail
+//         | "(" expr ")"
+//         | ident func-args?
+//         | str
+//         | num
 static Node *primary (void) {
   Node *node;
   Token *tok;
 
-  if (consume ("(")) {
+  if (tok = consume ("(")) {
+    if (consume ("{"))
+      return stmt_expr (tok);
+
     node = expr ();
     expect (")");
     return node;
@@ -529,12 +580,10 @@ static Node *primary (void) {
     var->contents = tok->contents;
     var->cont_len = tok->cont_len;
     return new_var_node (var, tok);
+  } else if (token->kind == TK_NUM) {
+    return new_num (expect_number (), token);
   } else {
-    tok = token;
-    if (tok->kind != TK_NUM)
-      error_tok (tok, "expected expression");
-
-    return new_num (expect_number (), tok);
+    error_tok (token, "expected expression");
   }
 }
 
